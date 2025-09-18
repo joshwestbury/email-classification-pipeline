@@ -1,0 +1,281 @@
+{
+  "n_clusters": 24,
+  "n_noise": 133,
+  "cluster_stats": {
+    "-1": {
+      "size": 133,
+      "percentage": 18.91891891891892,
+      "sample_subjects": [
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject"
+      ]
+    },
+    "0": {
+      "size": 29,
+      "percentage": 4.125177809388336,
+      "sample_subjects": [
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject"
+      ]
+    },
+    "1": {
+      "size": 11,
+      "percentage": 1.5647226173541962,
+      "sample_subjects": [
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject"
+      ]
+    },
+    "2": {
+      "size": 14,
+      "percentage": 1.991465149359886,
+      "sample_subjects": [
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject"
+      ]
+    },
+    "3": {
+      "size": 12,
+      "percentage": 1.7069701280227598,
+      "sample_subjects": [
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject"
+      ]
+    },
+    "4": {
+      "size": 11,
+      "percentage": 1.5647226173541962,
+      "sample_subjects": [
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject"
+      ]
+    },
+    "5": {
+      "size": 15,
+      "percentage": 2.1337126600284493,
+      "sample_subjects": [
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject"
+      ]
+    },
+    "6": {
+      "size": 23,
+      "percentage": 3.2716927453769555,
+      "sample_subjects": [
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject"
+      ]
+    },
+    "7": {
+      "size": 10,
+      "percentage": 1.422475106685633,
+      "sample_subjects": [
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject"
+      ]
+    },
+    "8": {
+      "size": 12,
+      "percentage": 1.7069701280227598,
+      "sample_subjects": [
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject"
+      ]
+    },
+    "9": {
+      "size": 61,
+      "percentage": 8.677098150782362,
+      "sample_subjects": [
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject"
+      ]
+    },
+    "10": {
+      "size": 26,
+      "percentage": 3.698435277382646,
+      "sample_subjects": [
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject"
+      ]
+    },
+    "11": {
+      "size": 11,
+      "percentage": 1.5647226173541962,
+      "sample_subjects": [
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject"
+      ]
+    },
+    "12": {
+      "size": 10,
+      "percentage": 1.422475106685633,
+      "sample_subjects": [
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject"
+      ]
+    },
+    "13": {
+      "size": 16,
+      "percentage": 2.275960170697013,
+      "sample_subjects": [
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject"
+      ]
+    },
+    "14": {
+      "size": 28,
+      "percentage": 3.982930298719772,
+      "sample_subjects": [
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject"
+      ]
+    },
+    "15": {
+      "size": 18,
+      "percentage": 2.5604551920341394,
+      "sample_subjects": [
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject"
+      ]
+    },
+    "16": {
+      "size": 17,
+      "percentage": 2.418207681365576,
+      "sample_subjects": [
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject"
+      ]
+    },
+    "17": {
+      "size": 13,
+      "percentage": 1.849217638691323,
+      "sample_subjects": [
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject"
+      ]
+    },
+    "18": {
+      "size": 11,
+      "percentage": 1.5647226173541962,
+      "sample_subjects": [
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject"
+      ]
+    },
+    "19": {
+      "size": 11,
+      "percentage": 1.5647226173541962,
+      "sample_subjects": [
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject"
+      ]
+    },
+    "20": {
+      "size": 10,
+      "percentage": 1.422475106685633,
+      "sample_subjects": [
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject"
+      ]
+    },
+    "21": {
+      "size": 51,
+      "percentage": 7.254623044096728,
+      "sample_subjects": [
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject"
+      ]
+    },
+    "22": {
+      "size": 68,
+      "percentage": 9.672830725462305,
+      "sample_subjects": [
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject"
+      ]
+    },
+    "23": {
+      "size": 82,
+      "percentage": 11.66429587482219,
+      "sample_subjects": [
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject",
+        "No Subject"
+      ]
+    }
+  }
+}

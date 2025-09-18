@@ -13,7 +13,7 @@ def main():
     print("=== CLUSTERING ANALYSIS AND PARAMETER EXPERIMENTATION ===\n")
 
     # Initialize clusterer
-    clusterer = EmailClusterer('email_embeddings.npy', 'email_metadata.json')
+    clusterer = EmailClusterer('incoming_email_embeddings.npy', 'incoming_email_metadata.json')
 
     # Load data
     clusterer.load_data()
