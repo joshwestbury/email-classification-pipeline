@@ -16,12 +16,29 @@
   - [x] Anonymize addresses, emails, phone numbers, account numbers, tax IDs
   - [x] Generate anonymized dataset (`emails_anonymized.json`)
 
-- [x] **Generate Embeddings** 📊
+- [x] **Data Processing & Thread Separation** 🔧
+  - [x] Parse and separate threaded email conversations into individual exchanges
+  - [x] Clean HTML content and preserve only text content
+  - [x] Classify email direction using @litera.com rule (outgoing vs incoming)
+  - [x] Final dataset: 5,693 individual emails (703 incoming, 4,990 outgoing)
+  - [x] Create master dataset (`master_email_threads.json`)
+
+- [x] **PII Detection and Anonymization** 🔐
+  - [x] Anonymize master email threads dataset (`anonymize_master_emails.py`)
+  - [x] Preserve @litera.com emails for direction classification
+  - [x] Anonymize emails, phone numbers, addresses, names, companies
+  - [x] Generate anonymized dataset (`master_email_threads_anonymized.json`)
+  - [x] Successfully anonymized 96.9% of emails (5,514/5,693)
+
+- [x] **Generate Embeddings - Option A** 📊
   - [x] Install and set up embedding model (sentence-transformers)
-  - [x] Create script to generate embeddings for anonymized email messages (`generate_embeddings.py`)
+  - [x] Implement Option A: Separate individual and thread context embeddings
+  - [x] Create threaded embedding script (`generate_embeddings_threaded.py`)
   - [x] Choose appropriate embedding model for business/collection text (all-MiniLM-L6-v2)
-  - [x] Save embeddings to file for clustering analysis (`email_embeddings.npy`, `email_metadata.json`)
-  - [x] Successfully processed 4,697 emails into 384-dimensional embeddings
+  - [x] Generate individual incoming email embeddings (703 emails, 384 dims)
+  - [x] Generate thread context embeddings (372 threads, 384 dims)
+  - [x] Save embeddings and metadata (`incoming_email_embeddings.npy`, `thread_context_embeddings.npy`)
+  - [x] **Option A Benefits**: Individual classification + contextual analysis capability
 
 ### 🔄 Current Phase: Phase 1 - Taxonomy Discovery
 
@@ -88,11 +105,12 @@
 ### 🔧 Technical Setup Needed
 
 #### Dependencies to Install
-- [ ] `sentence-transformers` - For generating embeddings
-- [ ] `umap-learn` - For dimensionality reduction
-- [ ] `hdbscan` - For clustering
-- [ ] `matplotlib`, `seaborn` - For visualization
-- [ ] `plotly` - For interactive visualizations
+- [x] `sentence-transformers` - For generating embeddings
+- [x] `umap-learn` - For dimensionality reduction
+- [x] `hdbscan` - For clustering
+- [x] `matplotlib`, `seaborn` - For visualization
+- [x] `plotly` - For interactive visualizations
+- [x] `numpy`, `tqdm` - Supporting libraries
 - [ ] `openai` or local LLM setup - For category generation
 - [ ] `pydantic` - For JSON schema validation
 
@@ -106,16 +124,30 @@
 
 ```
 scg-ai-collection-notes/
-├── CLAUDE.md                              # Project guidance
-├── emails_cleaned.json                    # Cleaned email data (4,697 records)
-├── emails_anonymized.json                 # Anonymized for taxonomy work
-├── emails_with_pii.json                   # PII detection results
-├── clean_emails.py                        # HTML cleaning script
-├── detect_pii.py                         # PII detection script
-├── anonymize_emails.py                   # Anonymization script
-├── todo.md                               # This file
-└── Collection Notes - Sentiment Analysis/
-    └── CollectionNotes_SentimentAnalysis_SampleEmails.json  # Original data
+├── CLAUDE.md                                    # Project guidance
+├── todo.md                                     # This file
+├── Collection Notes - Sentiment Analysis/
+│   └── CollectionNotes_SentimentAnalysis_SampleEmails.json  # Original data
+│
+├── master_email_threads.json                   # Processed dataset (5,693 individual emails)
+├── master_email_threads_anonymized.json        # Anonymized final dataset
+│
+├── incoming_email_embeddings.npy               # Individual email embeddings (703)
+├── thread_context_embeddings.npy               # Thread context embeddings (372)
+├── incoming_email_metadata.json                # Individual email metadata
+├── thread_context_metadata.json                # Thread context metadata
+├── embeddings_config.json                      # Embedding generation config
+│
+├── generate_embeddings_threaded.py             # Option A embedding generation
+├── anonymize_master_emails.py                  # Master dataset anonymization
+├── clean_emails.py                            # HTML cleaning script
+├── detect_pii.py                              # PII detection script
+├── anonymize_emails.py                        # Original anonymization script
+└── Legacy files:
+    ├── emails_cleaned.json                     # Previous cleaned data
+    ├── emails_anonymized.json                  # Previous anonymized data
+    ├── generate_embeddings.py                  # Original embedding script
+    └── cluster_emails.py                       # Previous clustering script
 ```
 
 ### 🎯 Success Metrics
