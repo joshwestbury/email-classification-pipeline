@@ -16,31 +16,32 @@
   - [x] Anonymize addresses, emails, phone numbers, account numbers, tax IDs
   - [x] Generate anonymized dataset (`emails_anonymized.json`)
 
+- [x] **Generate Embeddings** 📊
+  - [x] Install and set up embedding model (sentence-transformers)
+  - [x] Create script to generate embeddings for anonymized email messages (`generate_embeddings.py`)
+  - [x] Choose appropriate embedding model for business/collection text (all-MiniLM-L6-v2)
+  - [x] Save embeddings to file for clustering analysis (`email_embeddings.npy`, `email_metadata.json`)
+  - [x] Successfully processed 4,697 emails into 384-dimensional embeddings
+
 ### 🔄 Current Phase: Phase 1 - Taxonomy Discovery
 
 #### Next Steps (Priority Order)
 
-1. **Generate Embeddings** 📊
-   - [ ] Install and set up embedding model (e.g., sentence-transformers)
-   - [ ] Create script to generate embeddings for anonymized email messages
-   - [ ] Choose appropriate embedding model for business/collection text
-   - [ ] Save embeddings to file for clustering analysis
+1. **Clustering Analysis** ✅
+   - [x] Install UMAP and HDBSCAN libraries
+   - [x] Create clustering script using UMAP for dimensionality reduction
+   - [x] Apply HDBSCAN for clustering similar emails
+   - [x] Experiment with different clustering parameters
+   - [x] Visualize clusters to understand email groupings
 
-2. **Clustering Analysis** 🎯
-   - [ ] Install UMAP and HDBSCAN libraries
-   - [ ] Create clustering script using UMAP for dimensionality reduction
-   - [ ] Apply HDBSCAN for clustering similar emails
-   - [ ] Experiment with different clustering parameters
-   - [ ] Visualize clusters to understand email groupings
-
-3. **LLM Category Proposal** 🤖
+2. **LLM Category Proposal** 🤖
    - [ ] Set up LLM integration (OpenAI API or local model)
    - [ ] Create script to analyze email clusters
    - [ ] Generate initial category names and definitions
    - [ ] Propose decision rules for each category
    - [ ] Target 10-16 intent categories, 4-5 sentiment categories
 
-4. **Human Curation and Validation** 👥
+3. **Human Curation and Validation** 👥
    - [ ] Review LLM-proposed categories for business relevance
    - [ ] Ensure categories are mutually exclusive
    - [ ] Refine category definitions based on domain expertise
