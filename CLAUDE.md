@@ -18,24 +18,33 @@ This project enhances a custom **Collection Notes** module in NetSuite by introd
 
 ## Project Phases
 
-### Phase 1: Taxonomy Discovery
+### Phase 1: Taxonomy Discovery ✅ **COMPLETED**
 
 **Goal**: Develop a preliminary, reusable taxonomy of sentiment and intent categories from ~1k real collection emails.
 
-**Key Steps**:
+**Status**: Complete - All deliverables generated and refined for production use
 
-1. Data preparation and anonymization of sensitive information
-2. Generate embeddings and cluster emails using UMAP and HDBSCAN
-3. Use LLM to propose category names, definitions, and decision rules
-4. Human curation to ensure mutually exclusive categories (10-16 intents, 4-5 sentiments)
+**Key Accomplishments**:
+- Successfully clustered 703 incoming emails into 24 distinct groups
+- Generated preliminary categories using GPT-4o analysis of top 8 clusters
+- Refined taxonomy through human curation into production-ready categories
+- Created comprehensive labeling guide with examples and decision rules
+
+**Final Taxonomy**:
+- **3 Intent Categories**: Payment Inquiry, Invoice Management, Information Request
+- **4 Sentiment Categories**: Cooperative, Administrative, Informational, Frustrated
+- **Coverage**: 52.3% of emails from analyzed clusters
+- **Business Value**: Clear actionable categories for NetSuite Collection Notes
 
 **Deliverables**:
 
-- `taxonomy_draft.json` — initial categories with examples
-- `taxonomy.yaml` — curated taxonomy with definitions and rules
-- `taxonomy_labeling_guide.md` — guide with examples and counterexamples
+- `taxonomy_draft.json` — initial categories with examples ✅
+- `taxonomy.yaml` — curated taxonomy with definitions and rules ✅
+- `taxonomy_labeling_guide.md` — guide with examples and counterexamples ✅
+- `cluster_analyses_llm.json` — detailed LLM analysis of email clusters ✅
+- `master_email_threads_anonymized.json` — final processed dataset (5,693 emails) ✅
 
-### Phase 2: Prototype Classifier
+### Phase 2: Prototype Classifier **NEXT**
 
 **Goal**: Build and validate an LLM-powered classifier that applies the taxonomy to real emails.
 
@@ -54,21 +63,64 @@ This project enhances a custom **Collection Notes** module in NetSuite by introd
 - `confusion_matrix.png` — model vs human performance visualization
 - `system_prompt.txt` — final prompt for production use
 
+## Reusable Pipeline Architecture
+
+The project now includes a modular pipeline system for processing multiple email datasets:
+
+### Pipeline Components
+
+- **`pipeline/`** — Modular components for reusable taxonomy discovery
+- **`run_pipeline.py`** — CLI entry point for processing new datasets
+- **`pipeline_config_template.yaml`** — Configuration template for new datasets
+- **`PIPELINE_README.md`** — Usage documentation and examples
+
+### Using the Pipeline
+
+**Quick Start:**
+```bash
+# Create template configuration
+python run_pipeline.py --create-template
+
+# Process new email dataset
+python run_pipeline.py --input new_emails.json --dataset-name customer_q4
+
+# Use custom configuration
+python run_pipeline.py --config my_dataset.yaml
+```
+
+**Pipeline Steps:**
+1. Data processing (HTML cleaning, thread separation)
+2. PII anonymization (emails, phones, addresses, names)
+3. Embedding generation (sentence transformers)
+4. Clustering analysis (UMAP + HDBSCAN)
+5. LLM category proposal (GPT-4o analysis)
+
+Each dataset gets organized outputs in `outputs/{dataset_name}/` for easy management.
+
 ## Data Structure
 
-### Current Sentiment Categories - NOTE: these are merely examples and are not to be taken as standard or perminent.
+### Final Production Taxonomy (Phase 1 Results)
 
-Based on initial analysis (from `CollectionNotes_SentimentAnalysis.txt`):
+**Intent Categories:**
+- **Payment Inquiry** — Questions about payment status, methods, or schedules
+- **Invoice Management** — Requests for invoice details, corrections, or documentation
+- **Information Request** — General information requests not related to payments/invoices
 
-- **apologetic** — customer expresses regret or apology
-- **dispute**
-  - incorrect information (name, address, tax, amount, product, terms)
-  - unsatisfied (service issue, product issue)
-- **in process**
-  - pending approval
-  - pending payment
-- **acknowledgement** — customer confirms receipt of communication
-- **unknown** — unclear or insufficient information to categorize
+**Sentiment Categories:**
+- **Cooperative** — Willing to work together, positive engagement
+- **Administrative** — Neutral, business-focused communication
+- **Informational** — Seeking or providing factual information
+- **Frustrated** — Expressing dissatisfaction or impatience
+
+**Coverage**: 52.3% of emails from analyzed clusters (367 out of 703 incoming emails)
+
+*See `taxonomy.yaml` and `taxonomy_labeling_guide.md` for detailed definitions and examples.*
+
+### Legacy Categories (Pre-Phase 1)
+
+*These were preliminary examples from initial analysis - superseded by the production taxonomy above:*
+
+- apologetic, dispute, in process, acknowledgement, unknown
 
 ### Expected Output Schema
 
@@ -85,18 +137,49 @@ The classifier will output structured JSON containing:
 - **Note Type field**: Automated (can't be edited in UI) or User Generated
 - **Sentiment**: Picklist based on the taxonomy categories
 
-## Sample Data
+## Dataset Information
 
-- `CollectionNotes_SentimentAnalysis_SampleEmails.json`: Contains sample email data with IDs, subjects, and HTML message content for sentiment analysis training/testing
-- Each email record includes an ID, subject line, and full HTML message content from real collection correspondence
+### Original Sample Data
+- `CollectionNotes_SentimentAnalysis_SampleEmails.json`: Original sample email data (4,697 emails)
+
+### Processed Datasets
+- `master_email_threads.json`: Separated email threads (5,693 individual emails)
+- `master_email_threads_anonymized.json`: Final anonymized dataset for analysis
+- `incoming_email_embeddings.npy`: Vector embeddings for 703 incoming emails
+- `thread_context_embeddings.npy`: Context embeddings for 372 email threads
+
+### Pipeline Outputs
+When using the pipeline with new datasets, outputs are organized in:
+```
+outputs/{dataset_name}/
+├── processed_emails.json     # Cleaned and structured
+├── anonymized_emails.json    # PII-removed dataset
+├── embeddings/              # Vector representations
+├── cluster_results.json     # Clustering analysis
+├── taxonomy_analysis.json   # LLM-proposed categories
+└── pipeline_summary.json    # Run summary and metrics
+```
 
 ## Development Workflow
 
 When working on this project:
 
-1. Follow the phase-based approach outlined in `project_plan.md`
-2. Ensure all sensitive data is properly anonymized during processing
-3. Maintain version control for taxonomy files and prompts
-4. Document model performance metrics and validation results
-5. Prepare deliverables for eventual NetSuite User Event integration
+1. **For new datasets**: Use the pipeline system (`run_pipeline.py`) for consistent processing
+2. **Phase 2 development**: Build on the completed Phase 1 taxonomy and deliverables
+3. Ensure all sensitive data is properly anonymized during processing
+4. Maintain version control for taxonomy files and prompts
+5. Document model performance metrics and validation results
+6. Prepare deliverables for eventual NetSuite User Event integration
+
+### Pipeline Usage for New Datasets
+
+```bash
+# Quick start with new email dataset
+python run_pipeline.py --input new_emails.json --dataset-name dataset_name
+
+# Custom configuration approach
+python run_pipeline.py --create-template
+# Edit the generated template
+python run_pipeline.py --config my_config.yaml
+```
 
