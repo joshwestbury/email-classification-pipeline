@@ -70,7 +70,7 @@ analyze_top_clusters: 12       # Analyze more clusters
 
 - Python 3.8+
 - OpenAI API key (set `OPENAI_API_KEY` environment variable)
-- Input data in same format as `CollectionNotes_SentimentAnalysis_SampleEmails.json`
+- Input data in same format as `litera_raw_emails.json`
 
 ## Next Steps After Pipeline Run
 

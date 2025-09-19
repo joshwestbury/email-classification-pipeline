@@ -20,7 +20,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from pipeline.config import PipelineConfig, ConfigManager
+from pipeline.config import ConfigManager, PipelineConfig
 from pipeline.pipeline import TaxonomyPipeline
 
 
@@ -31,7 +31,7 @@ def create_template_config(output_path: str) -> None:
     print("Edit this file with your dataset details and rerun the pipeline.")
 
 
-def run_pipeline_from_config(config_path: str, steps: str = None) -> None:
+def run_pipeline_from_config(config_path: str, steps: str | None = None) -> None:
     """Run the pipeline using a configuration file."""
     if not Path(config_path).exists():
         print(f"Error: Configuration file {config_path} not found.")
@@ -60,7 +60,7 @@ def run_pipeline_from_config(config_path: str, steps: str = None) -> None:
     print(f"Output directory: {Path(config.output_dir) / config.dataset_name}")
 
 
-def run_pipeline_quick(input_file: str, dataset_name: str = None) -> None:
+def run_pipeline_quick(input_file: str, dataset_name: str | None = None) -> None:
     """Run the pipeline with minimal configuration."""
     if not Path(input_file).exists():
         print(f"Error: Input file {input_file} not found.")
@@ -71,7 +71,9 @@ def run_pipeline_quick(input_file: str, dataset_name: str = None) -> None:
     if dataset_name is None:
         dataset_name = "temp"  # Will be replaced by auto-numbering
 
-    config = ConfigManager.create_default_config(dataset_name, input_file, auto_number=auto_number)
+    config = ConfigManager.create_default_config(
+        dataset_name, input_file, auto_number=auto_number
+    )
     pipeline = TaxonomyPipeline(config)
 
     results = pipeline.run_full_pipeline()
@@ -98,46 +100,40 @@ Examples:
 
     # Quick run
     python run_pipeline.py --input emails.json --dataset-name dataset1
-        """
+        """,
     )
 
     group = parser.add_mutually_exclusive_group(required=True)
 
     group.add_argument(
-        '--create-template',
-        action='store_true',
-        help='Create a template configuration file'
+        "--create-template",
+        action="store_true",
+        help="Create a template configuration file",
     )
+
+    group.add_argument("--config", type=str, help="Path to configuration YAML file")
 
     group.add_argument(
-        '--config',
-        type=str,
-        help='Path to configuration YAML file'
-    )
-
-    group.add_argument(
-        '--input',
-        type=str,
-        help='Input email JSON file (for quick run)'
+        "--input", type=str, help="Input email JSON file (for quick run)"
     )
 
     parser.add_argument(
-        '--dataset-name',
+        "--dataset-name",
         type=str,
-        help='Name for the dataset (optional - will auto-generate output_analysis_# if not provided)'
+        help="Name for the dataset (optional - will auto-generate output_analysis_# if not provided)",
     )
 
     parser.add_argument(
-        '--steps',
+        "--steps",
         type=str,
-        help='Comma-separated list of steps to run (processing,anonymization,embedding,clustering,analysis)'
+        help="Comma-separated list of steps to run (processing,anonymization,embedding,clustering,analysis)",
     )
 
     parser.add_argument(
-        '--template-output',
+        "--template-output",
         type=str,
-        default='pipeline_config_template.yaml',
-        help='Output path for template config (default: pipeline_config_template.yaml)'
+        default="pipeline_config_template.yaml",
+        help="Output path for template config (default: pipeline_config_template.yaml)",
     )
 
     args = parser.parse_args()
@@ -152,3 +148,4 @@ Examples:
 
 if __name__ == "__main__":
     main()
+

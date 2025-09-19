@@ -22,24 +22,37 @@ class TaxonomyCurator:
 
     def __init__(self):
         self.curation_rules = {
-            # Intent consolidation rules
+            # Intent consolidation rules - More granular categories
             'intent_consolidation': {
-                'Payment Inquiry': ['payment inquiry', 'payment status', 'payment question'],
-                'Invoice Management': ['invoice management', 'invoice question', 'billing inquiry'],
-                'Information Request': ['information request', 'general inquiry', 'account inquiry']
+                'Payment Status Inquiry': ['payment status', 'payment inquiry', 'payment question'],
+                'Payment Promise': ['payment promise', 'payment commitment', 'will pay'],
+                'Hardship Communication': ['hardship', 'financial difficulty', 'cannot pay'],
+                'Dispute Resolution': ['dispute', 'challenge', 'disagree', 'error'],
+                'Invoice Documentation': ['invoice request', 'documentation', 'w9', 'receipt'],
+                'Account Information Update': ['account update', 'information update', 'contact change'],
+                'Payment Method Inquiry': ['payment method', 'payment option', 'how to pay'],
+                'Settlement Negotiation': ['settlement', 'payment arrangement', 'negotiate'],
+                'Acknowledgment': ['acknowledge', 'received', 'confirm receipt'],
+                'Third Party Authorization': ['lawyer', 'attorney', 'representative']
             },
-            # Sentiment consolidation rules
+            # Sentiment consolidation rules - More emotional granularity
             'sentiment_consolidation': {
-                'Cooperative': ['cooperative', 'willing', 'collaborative'],
-                'Administrative': ['administrative', 'neutral', 'business'],
-                'Informational': ['informational', 'factual', 'inquiry'],
-                'Frustrated': ['frustrated', 'angry', 'dissatisfied']
+                'Apologetic': ['apologetic', 'sorry', 'regret', 'apologize'],
+                'Frustrated': ['frustrated', 'angry', 'upset', 'dissatisfied'],
+                'Cooperative': ['cooperative', 'willing', 'helpful', 'collaborative'],
+                'Defensive': ['defensive', 'excuse', 'not my fault', 'justify'],
+                'Urgent': ['urgent', 'emergency', 'asap', 'immediate'],
+                'Professional': ['professional', 'formal', 'business', 'neutral'],
+                'Confused': ['confused', 'unclear', 'don\'t understand', 'clarification'],
+                'Grateful': ['grateful', 'thank', 'appreciate', 'thankful'],
+                'Desperate': ['desperate', 'pleading', 'help', 'severe']
             }
         }
 
         # Initialize sentence transformer for semantic similarity
         self.similarity_model = None
-        self.similarity_threshold = 0.70  # Lower threshold to catch semantically similar categories like information updates
+        self.similarity_threshold = 0.60  # Lower threshold to preserve distinct categories
+        self.sentiment_similarity_threshold = 0.50  # Even lower threshold for sentiment to preserve emotional nuance
 
     def _get_similarity_model(self) -> SentenceTransformer:
         """Lazy load the sentence transformer model."""
@@ -64,20 +77,48 @@ class TaxonomyCurator:
 
     def _has_distinct_business_value(self, cat1_name: str, cat2_name: str) -> bool:
         """Check if two categories have distinct business value that should be preserved."""
-        # Business value keywords that should remain separate
-        distinct_keywords = [
-            ('payment', 'invoice'),      # Payment vs Invoice management are different
-            ('payment', 'dispute'),      # Payment vs Dispute handling are different
-            ('invoice', 'dispute'),      # Invoice vs Dispute are different
-            ('inquiry', 'management'),   # Inquiry vs Management are different
-            ('administrative', 'payment'), # Administrative vs Payment are different
-            ('administrative', 'dispute')  # Administrative vs Dispute are different
-        ]
-
         cat1_lower = cat1_name.lower()
         cat2_lower = cat2_name.lower()
 
-        # Special case: "information update" variants should be merged
+        # Emotional sentiment categories that must remain distinct
+        emotional_distinctions = [
+            ('apologetic', 'frustrated'),    # Very different emotional states
+            ('apologetic', 'defensive'),     # Different emotional responses
+            ('frustrated', 'cooperative'),   # Opposite emotional states
+            ('frustrated', 'grateful'),      # Opposite emotional states
+            ('defensive', 'cooperative'),    # Different customer attitudes
+            ('urgent', 'apologetic'),        # Different emotional urgency
+            ('desperate', 'professional'),   # Very different emotional states
+            ('confused', 'defensive'),       # Different emotional responses
+            ('grateful', 'desperate'),       # Different emotional states
+        ]
+
+        # Business intent keywords that should remain separate
+        intent_distinctions = [
+            ('payment', 'invoice'),          # Payment vs Invoice management are different
+            ('payment', 'dispute'),          # Payment vs Dispute handling are different
+            ('invoice', 'dispute'),          # Invoice vs Dispute are different
+            ('inquiry', 'promise'),          # Inquiry vs Promise are different actions
+            ('hardship', 'settlement'),      # Hardship vs Settlement are different situations
+            ('documentation', 'status'),     # Documentation vs Status requests are different
+            ('acknowledgment', 'authorization'), # Different types of communication
+        ]
+
+        # Check emotional distinctions first (most important for sentiment)
+        for emotion1, emotion2 in emotional_distinctions:
+            if ((emotion1 in cat1_lower and emotion2 in cat2_lower) or
+                (emotion2 in cat1_lower and emotion1 in cat2_lower)):
+                logger.debug(f"Preserving distinct emotional states: '{cat1_name}' vs '{cat2_name}'")
+                return True
+
+        # Check business intent distinctions
+        for intent1, intent2 in intent_distinctions:
+            if ((intent1 in cat1_lower and intent2 in cat2_lower) or
+                (intent2 in cat1_lower and intent1 in cat2_lower)):
+                logger.debug(f"Preserving distinct business intents: '{cat1_name}' vs '{cat2_name}'")
+                return True
+
+        # Special case: "information update" variants can still be merged
         info_update_variants = ['information update', 'account information', 'update notification']
         cat1_has_info_update = any(variant in cat1_lower for variant in info_update_variants)
         cat2_has_info_update = any(variant in cat2_lower for variant in info_update_variants)
@@ -85,11 +126,6 @@ class TaxonomyCurator:
         if cat1_has_info_update and cat2_has_info_update:
             logger.debug(f"Both categories are information update variants: '{cat1_name}' and '{cat2_name}' - allowing merge")
             return False  # Allow merging of information update variants
-
-        for keyword1, keyword2 in distinct_keywords:
-            if ((keyword1 in cat1_lower and keyword2 in cat2_lower) or
-                (keyword2 in cat1_lower and keyword1 in cat2_lower)):
-                return True
 
         return False
 
@@ -673,8 +709,18 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
         sentiment_categories = {}
 
         for cluster_id, analysis in cluster_analyses.items():
+            # Skip failed analyses that contain errors
+            if 'error' in analysis:
+                logger.warning(f"Skipping cluster {cluster_id} due to analysis error: {analysis.get('error', 'Unknown error')}")
+                continue
+
+            # Skip analyses that don't have required fields
+            if not analysis.get('proposed_intent') or not analysis.get('proposed_sentiment'):
+                logger.warning(f"Skipping cluster {cluster_id} due to missing intent or sentiment")
+                continue
+
             # Extract intent information
-            intent_name = analysis.get('proposed_intent', f'Intent_{cluster_id}')
+            intent_name = analysis.get('proposed_intent')
             if intent_name not in intent_categories:
                 intent_categories[intent_name] = {
                     'definition': analysis.get('intent_definition', ''),
@@ -688,32 +734,42 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
             intent_categories[intent_name]['clusters'].append(cluster_id)
             intent_categories[intent_name]['total_emails'] += analysis.get('cluster_size', 0)
 
-            # Extract sentiment information
-            sentiment_name = analysis.get('proposed_sentiment', f'Sentiment_{cluster_id}').split('/')[0]
+            # Extract sentiment information with emotional markers
+            sentiment_name = analysis.get('proposed_sentiment').split('/')[0]
             if sentiment_name not in sentiment_categories:
                 sentiment_categories[sentiment_name] = {
                     'definition': analysis.get('sentiment_definition', ''),
+                    'emotional_markers': [],
+                    'sample_indicators': analysis.get('sample_indicators', []),
                     'clusters': [],
                     'total_emails': 0
                 }
+
+            # Add emotional markers for more granular sentiment analysis
+            emotional_markers = analysis.get('emotional_markers', [])
+            if emotional_markers:
+                sentiment_categories[sentiment_name]['emotional_markers'].extend(emotional_markers)
 
             sentiment_categories[sentiment_name]['clusters'].append(cluster_id)
             sentiment_categories[sentiment_name]['total_emails'] += analysis.get('cluster_size', 0)
 
         logger.info(f"Extracted {len(intent_categories)} raw intent categories before consolidation")
 
-        # Apply consolidation steps
-        # Step 1: Semantic similarity merging (lower threshold to catch similar information update variants)
-        consolidated_intents = self._merge_similar_categories(intent_categories, threshold=0.70)
+        # Apply consolidation steps with different thresholds for intent vs sentiment
+        # Step 1: Semantic similarity merging for intents (moderate threshold)
+        consolidated_intents = self._merge_similar_categories(intent_categories, threshold=self.similarity_threshold)
 
-        # Step 2: Business pattern consolidation
+        # Step 2: Semantic similarity merging for sentiments (lower threshold to preserve emotional nuance)
+        consolidated_sentiments = self._merge_similar_categories(sentiment_categories, threshold=self.sentiment_similarity_threshold)
+
+        # Step 3: Business pattern consolidation for intents only (sentiments should remain granular)
         final_intents = self._apply_business_consolidation_rules(consolidated_intents)
 
-        logger.info(f"Final result: {len(final_intents)} consolidated intent categories")
+        logger.info(f"Final result: {len(final_intents)} consolidated intent categories, {len(consolidated_sentiments)} sentiment categories")
 
         return {
             'intent_categories': final_intents,
-            'sentiment_categories': sentiment_categories
+            'sentiment_categories': consolidated_sentiments
         }
 
     def _generate_realistic_examples(self, intent_name: str, indicators: List[str]) -> List[str]:

@@ -33,11 +33,13 @@ class Embedder:
         return self.model
 
     def extract_incoming_emails(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Extract incoming emails for individual classification."""
+        """Extract ONLY incoming emails for individual classification."""
         incoming_emails = []
+        total_emails = 0
 
         emails = data.get('emails', [])
         for idx, email in enumerate(emails):
+            total_emails += 1
             if email.get('direction') == 'incoming':
                 email_record = {
                     'email_id': email.get('id', f"email_{idx}"),
@@ -50,7 +52,7 @@ class Embedder:
                 }
                 incoming_emails.append(email_record)
 
-        logger.info(f"Extracted {len(incoming_emails)} incoming emails for embedding")
+        logger.info(f"Filtered to {len(incoming_emails)} incoming emails from {total_emails} total emails for customer taxonomy analysis")
         return incoming_emails
 
     def extract_thread_contexts(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -58,7 +60,7 @@ class Embedder:
         if not self.include_thread_context:
             return []
 
-        # Group emails by thread_id
+        # Group emails by thread_id - but only include threads with incoming emails
         threads = {}
         emails = data.get('emails', [])
 
@@ -70,10 +72,10 @@ class Embedder:
 
         thread_contexts = []
         for thread_id, thread_emails in threads.items():
-            # Only include threads with multiple emails or incoming emails
+            # Only include threads that contain incoming emails (customer communications)
             incoming_count = sum(1 for e in thread_emails if e.get('direction') == 'incoming')
 
-            if len(thread_emails) > 1 or incoming_count > 0:
+            if incoming_count > 0:  # Only threads with customer emails
                 # Get thread subject (from first email)
                 thread_subject = thread_emails[0].get('subject', '') if thread_emails else ''
 

@@ -95,7 +95,7 @@
 
 **Key Accomplishments**:
 - Built complete reusable pipeline system in `pipeline/` branch
-- Successfully processes `CollectionNotes_SentimentAnalysis_SampleEmails.json` format
+- Successfully processes `litera_raw_emails.json` format
 - Proper email thread separation (4,697 → 4,732 emails)
 - Email direction classification (191 incoming, 4,541 outgoing)
 - Complete taxonomy generation with rich formatting
@@ -353,7 +353,7 @@ scg-ai-collection-notes/
 ├── todo.md                                     # This file
 ├── taxonomy.yaml                               # Reference taxonomy (master branch)
 ├── Collection Notes - Sentiment Analysis/
-│   └── CollectionNotes_SentimentAnalysis_SampleEmails.json  # Original data
+│   └── litera_raw_emails.json  # Original data
 │
 ├── pipeline/                                   # Reusable pipeline system
 │   ├── __init__.py
@@ -460,7 +460,7 @@ scg-ai-collection-notes/
 **Pipeline Re-run Command** (after improvements):
 ```bash
 # Test enhanced classification on current dataset
-uv run python run_pipeline.py --input "Collection Notes - Sentiment Analysis/CollectionNotes_SentimentAnalysis_SampleEmails.json"
+uv run python run_pipeline.py --input "Collection Notes - Sentiment Analysis/litera_raw_emails.json"
 
 # Output will be in outputs/output_analysis_2/ with improved email detection
 ```

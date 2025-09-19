@@ -32,5 +32,5 @@ save_intermediate: true    # Save intermediate results for debugging
 
 # Notes:
 # - Make sure to set OPENAI_API_KEY environment variable
-# - Input file should be in the same format as CollectionNotes_SentimentAnalysis_SampleEmails.json
+# - Input file should be in the same format as litera_raw_emails.json
 # - Adjust clustering parameters based on your dataset size and diversity

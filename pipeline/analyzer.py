@@ -94,8 +94,8 @@ class LLMAnalyzer:
         # Remove HTML tags if any remain
         content = re.sub(r'<[^>]+>', '', content)
 
-        # Limit length for API efficiency
-        max_length = 500
+        # Limit length for API efficiency while preserving important context
+        max_length = 1500  # Increased to capture more emotional and intent context
         if len(content) > max_length:
             content = content[:max_length] + "..."
 
@@ -126,57 +126,84 @@ class LLMAnalyzer:
             samples_text += "-" * 50 + "\n"
 
         prompt = f"""
-        Analyze the following collection of customer emails that have been clustered together based on semantic similarity. These are emails received by a collections/accounts receivable department.
+        Analyze the following collection of INCOMING CUSTOMER emails that have been clustered together based on semantic similarity. These are emails RECEIVED by a collections/accounts receivable department FROM CUSTOMERS.
+
+        CRITICAL: Create SPECIFIC, GRANULAR categories that capture distinct customer communication patterns. Avoid generic categories - focus on precise business intents and emotional tones.
 
         Cluster Statistics:
         - Cluster ID: {cluster_id}
-        - Cluster Size: {cluster_size} emails
-        - Percentage of Dataset: {cluster_percentage:.1f}%
+        - Cluster Size: {cluster_size} incoming customer emails
+        - Percentage of Incoming Emails: {cluster_percentage:.1f}%
 
         Your task is to:
-        1. Identify the common intent/purpose of these emails
-        2. Determine the overall sentiment/tone
-        3. Propose a category name and definition
-        4. Suggest decision rules for classifying similar emails
+        1. Identify the SPECIFIC intent/purpose of these customer emails (not generic categories)
+        2. Determine the PRECISE emotional tone and communication style
+        3. Create distinct, actionable categories for collections processing
+        4. Suggest precise decision rules with specific indicators
 
-        Sample emails from the cluster:
+        Sample CUSTOMER emails from the cluster:
         {samples_text}
 
-        Please provide your analysis in the following JSON format:
+        CRITICAL: You must respond with ONLY a valid JSON object. Do not include any text before or after the JSON. Do not use markdown formatting or code blocks. Return only the raw JSON.
+
+        Please provide your analysis in the following exact JSON format:
         {{
-            "proposed_intent": "intent category name",
-            "intent_definition": "clear definition of what this intent represents",
-            "proposed_sentiment": "sentiment category name",
-            "sentiment_definition": "clear definition of what this sentiment represents",
-            "decision_rules": ["rule 1", "rule 2", "rule 3"],
+            "proposed_intent": "specific intent category name",
+            "intent_definition": "precise definition focusing on customer's specific request or communication purpose",
+            "proposed_sentiment": "specific emotional tone category name",
+            "sentiment_definition": "precise definition of the customer's emotional state and communication style",
+            "decision_rules": ["specific rule 1", "specific rule 2", "specific rule 3"],
             "confidence": "high/medium/low",
-            "sample_indicators": ["key phrase 1", "key phrase 2"],
-            "reasoning": "explanation of why these emails cluster together",
-            "business_relevance": "how this category helps collections teams"
+            "sample_indicators": ["specific phrase 1", "specific phrase 2", "specific phrase 3"],
+            "emotional_markers": ["emotional indicator 1", "emotional indicator 2"],
+            "reasoning": "detailed explanation of why these emails cluster together",
+            "business_relevance": "specific value this category provides to collections operations"
         }}
 
-        Focus on collection-specific intents like:
-        - Payment inquiry/status requests
-        - Invoice/billing questions
-        - Dispute/disagreement
-        - Payment promise/commitment
-        - Hardship/financial difficulty
-        - Information requests
-        - Acknowledgment/confirmation
+        IMPORTANT FORMATTING RULES:
+        - Return ONLY the JSON object
+        - No additional text, explanations, or markdown
+        - Ensure all strings are properly quoted
+        - Ensure all arrays are properly formatted with square brackets
+        - Do not use trailing commas
+        - Validate that your response is parseable JSON before sending
 
-        For sentiment, consider:
-        - Cooperative/willing to resolve
-        - Frustrated/angry
-        - Apologetic/regretful
-        - Administrative/neutral
-        - Evasive/defensive
+        Create SPECIFIC intent categories such as:
+        - Payment Status Inquiry (asking about specific payment status)
+        - Payment Promise with Timeline (committing to pay by specific date)
+        - Hardship Communication (explaining financial difficulties)
+        - Dispute Resolution Request (challenging charges or seeking resolution)
+        - Invoice Documentation Request (asking for copies, receipts, W9s)
+        - Account Information Update (changing contact details, banking info)
+        - Payment Method Inquiry (asking about payment options, procedures)
+        - Settlement Negotiation (proposing payment arrangements)
+        - Acknowledgment of Receipt (confirming they received communication)
+        - Third Party Authorization (involving lawyers, representatives)
+
+        Create SPECIFIC sentiment categories that capture emotional tone:
+        - Apologetic (expressing regret, taking responsibility)
+        - Frustrated (showing irritation, anger, dissatisfaction)
+        - Cooperative (willing to work together, positive engagement)
+        - Defensive (making excuses, deflecting responsibility)
+        - Urgent (expressing time pressure, emergency situations)
+        - Professional (formal business tone, neutral emotion)
+        - Confused (seeking clarification, expressing uncertainty)
+        - Grateful (appreciative, thankful for assistance)
+        - Desperate (pleading, expressing severe financial stress)
+
+        IMPORTANT GUIDELINES:
+        - Avoid generic terms like "Administrative" or "Information Request"
+        - Focus on what the customer specifically wants or needs
+        - Capture the emotional undertone of how they're communicating
+        - Create categories that help collections teams understand customer state and respond appropriately
+        - Each category should represent a distinct communication pattern requiring different handling
         """
 
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "You are an expert in customer service and collections email analysis. You help categorize customer communications for business intelligence and automated processing."},
+                    {"role": "system", "content": "You are an expert in customer service and collections email analysis. You help categorize customer communications for business intelligence and automated processing. You MUST respond with valid JSON only - no other text, explanations, or formatting."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,
@@ -186,18 +213,35 @@ class LLMAnalyzer:
             # Parse JSON response
             response_text = response.choices[0].message.content.strip()
 
-            # Extract JSON from response
+            # Extract JSON from response with improved robustness
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
-                analysis_result = json.loads(json_match.group())
+                try:
+                    analysis_result = json.loads(json_match.group())
 
-                # Add cluster metadata
-                analysis_result['cluster_id'] = cluster_id
-                analysis_result['cluster_size'] = cluster_size
-                analysis_result['cluster_percentage'] = cluster_percentage
-                analysis_result['sample_count'] = len(sample_emails)
+                    # Validate required fields are present
+                    required_fields = ['proposed_intent', 'proposed_sentiment']
+                    missing_fields = [field for field in required_fields if not analysis_result.get(field)]
 
-                return analysis_result
+                    if missing_fields:
+                        logger.error(f"LLM response for cluster {cluster_id} missing required fields: {missing_fields}")
+                        return {"error": f"Missing required fields: {missing_fields}", "raw_response": response_text}
+
+                    # Add cluster metadata
+                    analysis_result['cluster_id'] = cluster_id
+                    analysis_result['cluster_size'] = cluster_size
+                    analysis_result['cluster_percentage'] = cluster_percentage
+                    analysis_result['sample_count'] = len(sample_emails)
+
+                    # Ensure emotional_markers field exists for emotional tone analysis
+                    if 'emotional_markers' not in analysis_result:
+                        analysis_result['emotional_markers'] = []
+
+                    return analysis_result
+
+                except json.JSONDecodeError as e:
+                    logger.error(f"JSON parsing error for cluster {cluster_id}: {str(e)}")
+                    return {"error": f"JSON parsing error: {str(e)}", "raw_response": response_text}
             else:
                 logger.error(f"Could not extract JSON from LLM response for cluster {cluster_id}")
                 return {"error": "Failed to parse LLM response", "raw_response": response_text}

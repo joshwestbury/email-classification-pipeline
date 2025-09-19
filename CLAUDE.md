@@ -140,7 +140,7 @@ The classifier will output structured JSON containing:
 ## Dataset Information
 
 ### Original Sample Data
-- `CollectionNotes_SentimentAnalysis_SampleEmails.json`: Original sample email data (4,697 emails)
+- `litera_raw_emails.json`: Original sample email data (4,697 emails)
 
 ### Processed Datasets
 - `master_email_threads.json`: Separated email threads (5,693 individual emails)

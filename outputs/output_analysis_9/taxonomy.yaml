@@ -1,0 +1,119 @@
+# Collection Notes AI - Sentiment and Intent Taxonomy
+# Derived from clustering analysis of 602 real collection emails
+# Production-ready categories for NetSuite Collection Notes automation
+
+version: "1.0"
+generated_date: "2024-09-19"
+source_emails: 602
+clusters_analyzed: 8
+coverage: "84.2%"  # 602 emails from top 8 clusters
+
+# INTENT CATEGORIES
+# Consolidated from 8 clusters into 2 actionable categories
+intent_categories:
+
+  administrative_communication:
+    display_name: "Administrative Communication"
+    description: "This intent represents emails that are primarily administrative in nature, often lacking specific requests or inquiries related to collections. They may include acknowledgments, confirmations, or general correspondence without a clear actionable item."
+    business_value: "Understanding this category helps the collections team identify emails that do not require immediate action or response, allowing them to focus on more urgent or actionable communications. It also aids in filtering out noise from the collections process."
+    coverage: "7.6%"  # 46 emails
+    decision_rules:
+      - "Emails with no specific subject or request related to collections"
+      - "Content primarily consists of formal signatures or disclaimers"
+      - "Emails that appear to be part of a larger thread without standalone context"
+    key_indicators:
+      - "Regards, [Company Name] Accounts Payable Team"
+      - "This message and any attachments are solely for the use of the intended recipients"
+      - "approved"
+    examples:
+      - "Email mentions: Regards, [Company Name] Accounts Payable Team"
+      - "Email mentions: This message and any attachments are solely for the use of the intended recipients"
+      - "Email mentions: approved"
+
+  account_information_update:
+    display_name: "Account Information Update"
+    description: "This intent represents customer communications aimed at updating their account details, such as banking information or address, to ensure accurate billing and payment processing."
+    business_value: "This category helps collections teams ensure that customer records are up-to-date, reducing the risk of payment delays or errors due to outdated information. It also aids in maintaining accurate billing and enhances customer satisfaction by acknowledging their updates promptly."
+    coverage: "92.4%"  # 556 emails
+    decision_rules:
+      - "Emails mentioning updates to banking information or address."
+      - "Communications that provide factual updates without emotional language"
+      - "Emails mentioning updates to banking information or addresses"
+      - "Requests to update records or invoices based on new information"
+      - "Emails requesting record updates without any emotional language."
+      - "Emails lacking any inquiry or dispute language."
+    key_indicators:
+      - "corrected invoice"
+      - "Chicago address"
+      - "please update your records"
+      - "updated our banking information"
+      - "update your records"
+    examples:
+      - "Email mentions: corrected invoice"
+      - "Email mentions: Chicago address"
+      - "Can you please update your records for my account?"
+
+# SENTIMENT CATEGORIES
+# Consolidated from 1 categories into distinct sentiment levels
+sentiment_categories:
+
+  administrative:
+    display_name: "Administrative"
+    description: "The sentiment is characterized by straightforward, factual communication without emotional undertones, focusing on administrative tasks."
+    business_value: "Standard processing - routine business communications"
+    coverage: "100.0%"  # 602 emails
+    decision_rules:
+      - "Email reports system or processing issues"
+      - "Email requests cancellations or corrections due to errors"
+      - "Email provides administrative status updates"
+      - "Email mentions processing delays or technical problems"
+    key_indicators:
+      - "cancel the invoice"
+      - "awaiting payment"
+      - "processed and currently awaiting"
+      - "unexpected error"
+      - "system issue"
+    examples:
+      - "Please cancel invoice #INV123 due to system error"
+      - "Invoice processed and currently awaiting final approval"
+      - "Unexpected error occurred during payment processing"
+
+# MODIFIER FLAGS
+# Additional flags for special handling
+modifier_flags:
+
+  urgency:
+    description: "Communication indicates time-sensitive matter"
+    indicators: ["urgent", "asap", "immediately", "deadline", "overdue"]
+
+  escalation:
+    description: "Customer mentions involving management or external parties"
+    indicators: ["manager", "supervisor", "escalate", "complaint", "legal"]
+
+  payment_commitment:
+    description: "Customer makes specific payment promise or timeline"
+    indicators: ["will pay", "payment scheduled", "check sent", "processing payment"]
+
+# VALIDATION RULES
+validation_rules:
+  mutual_exclusivity:
+    - "Each email must have exactly one intent category"
+    - "Each email must have exactly one sentiment category"
+    - "Modifier flags are optional and non-exclusive"
+
+  confidence_thresholds:
+    high_confidence: "Clear indicators present, unambiguous categorization"
+    medium_confidence: "Some indicators present, minor ambiguity"
+    low_confidence: "Weak indicators, significant ambiguity - flag for human review"
+
+# BUSINESS MAPPING
+netsuite_integration:
+  collection_note_fields:
+    sentiment: "Maps to Collection Note Sentiment picklist"
+    intent: "Maps to Collection Note Category field"
+    modifiers: "Maps to Collection Note Priority/Flags fields"
+
+  automation_triggers:
+    cooperative_payment_inquiry: "Auto-acknowledge receipt, provide status update"
+    invoice_management: "Route to billing team, auto-request documentation"
+    frustrated: "Priority queue, assign to senior collector"

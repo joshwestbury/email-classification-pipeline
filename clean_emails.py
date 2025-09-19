@@ -2,7 +2,7 @@
 """
 Script to clean up collection email JSON data.
 
-This script processes the CollectionNotes_SentimentAnalysis_SampleEmails.json file
+This script processes the litera_raw_emails.json file
 to extract clean email content by:
 1. Maintaining the 'id' and 'subject' properties
 2. Stripping HTML tags from the 'message' property
@@ -200,7 +200,7 @@ def fix_unescaped_quotes(record_text: str) -> str:
 def main():
     """Main function to process the email JSON file."""
     # Define file paths
-    input_file = Path("Collection Notes - Sentiment Analysis/CollectionNotes_SentimentAnalysis_SampleEmails.json")
+    input_file = Path("Collection Notes - Sentiment Analysis/litera_raw_emails.json")
     output_file = Path("emails_cleaned.json")
 
     try:

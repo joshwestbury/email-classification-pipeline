@@ -1,0 +1,36 @@
+{
+  "dataset": "improved_analysis_v2",
+  "config": {
+    "input_file": "Collection Notes - Sentiment Analysis/litera_raw_emails.json",
+    "dataset_name": "improved_analysis_v2",
+    "clean_html": true,
+    "anonymize_pii": true,
+    "separate_threads": true,
+    "embedding_model": "all-MiniLM-L6-v2",
+    "include_thread_context": true,
+    "umap_n_neighbors": 15,
+    "umap_min_dist": 0.1,
+    "umap_n_components": 50,
+    "hdbscan_min_cluster_size": 5,
+    "hdbscan_min_samples": 3,
+    "openai_model": "gpt-4o",
+    "analyze_top_clusters": 8,
+    "output_dir": "outputs",
+    "save_intermediate": true
+  },
+  "results": {
+    "total_emails": 0,
+    "incoming_emails": 0,
+    "outgoing_emails": 0,
+    "classification_ratio": "0/0",
+    "clusters_found": 5,
+    "categories_proposed": 2
+  },
+  "output_files": [
+    "outputs/improved_analysis_v2/processed_emails.json",
+    "outputs/improved_analysis_v2/anonymized_emails.json",
+    "outputs/improved_analysis_v2/embeddings",
+    "outputs/improved_analysis_v2/cluster_results.json",
+    "outputs/improved_analysis_v2/taxonomy_analysis.json"
+  ]
+}
