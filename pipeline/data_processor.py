@@ -549,17 +549,36 @@ class DataProcessor:
         for email in emails:
             message_content = email.get('message', '')
 
+            # Validate message content before processing - filter out whitespace-only content
+            if message_content and message_content.strip():
+                # Must contain at least one letter or number
+                if not re.search(r'[a-zA-Z0-9]', message_content):
+                    logger.debug(f"Skipping email {email.get('id')} with whitespace-only content: {repr(message_content[:50])}")
+                    continue
+            elif message_content:
+                logger.debug(f"Skipping email {email.get('id')} with empty/minimal content: {repr(message_content)}")
+                continue
+
             # Check if this email contains multiple threaded messages
             thread_emails = self._parse_email_thread(message_content)
 
             if len(thread_emails) > 1:
                 # Multiple emails found in thread
                 for i, thread_email in enumerate(thread_emails):
+                    # Validate thread email content as well
+                    thread_content = thread_email['content']
+                    if not thread_content or not thread_content.strip():
+                        logger.debug(f"Skipping thread email {i} with insufficient content")
+                        continue
+                    if not re.search(r'[a-zA-Z0-9]', thread_content):
+                        logger.debug(f"Skipping thread email {i} with whitespace-only content")
+                        continue
+
                     separated_email = {
                         'id': f"{email.get('id', '')}_{i}",
                         'original_id': email.get('id'),
                         'subject': email.get('subject', ''),
-                        'content': thread_email['content'],
+                        'content': thread_content,
                         'sender': thread_email.get('sender', ''),
                         'direction': self.classify_email_direction({'message': thread_email['content'], 'sender': thread_email.get('sender', '')}),
                         'thread_id': email.get('id'),
@@ -1161,7 +1180,19 @@ class DataProcessor:
                         value = value[1:-1]
                     # Remove quotes if they exist
                     value = value.strip('\'"')
-                    if value:  # Only add non-empty values
+
+                    # Special validation for content fields to prevent whitespace-only content
+                    if field == 'message':
+                        # Check if content is meaningful (not just whitespace/newlines)
+                        if value and value.strip():
+                            # Must contain at least one letter or number
+                            if re.search(r'[a-zA-Z0-9]', value):
+                                extracted[field] = value
+                            else:
+                                logger.debug(f"Filtered out whitespace-only message content: {repr(value[:50])}")
+                        else:
+                            logger.debug(f"Filtered out empty/minimal message content: {repr(value)}")
+                    elif value:  # For non-message fields, just check if non-empty
                         extracted[field] = value
                     break  # Use the first pattern that matches
 
