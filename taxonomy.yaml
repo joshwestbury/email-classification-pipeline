@@ -1,0 +1,197 @@
+# Collection Notes AI - Sentiment and Intent Taxonomy
+# Derived from clustering analysis of 703 real collection emails
+# Production-ready categories for NetSuite Collection Notes automation
+
+version: "1.0"
+generated_date: "2024-09-18"
+source_emails: 703
+clusters_analyzed: 8
+coverage: "52.3%"  # 368 emails from top 8 clusters
+
+# INTENT CATEGORIES
+# Consolidated from 8 preliminary categories into 5 actionable categories
+intent_categories:
+
+  payment_inquiry:
+    display_name: "Payment Inquiry"
+    description: "Customer requests information about payment status, processing, or seeks clarification on payment-related matters"
+    business_value: "Track customer engagement with payment processes"
+    coverage: "31.0%"  # 218 emails (clusters 23, 9, 14, 6)
+    decision_rules:
+      - "Email requests payment status update"
+      - "Email asks for payment processing timeline"
+      - "Email seeks confirmation of payment receipt"
+      - "Email requests payment method clarification"
+    key_indicators:
+      - "payment status"
+      - "payment has been initiated"
+      - "request an update on case"
+      - "payment will be in our payment run"
+      - "advise if I can pay with credit card"
+    examples:
+      - "Can you provide an update on case #12345?"
+      - "Payment has been initiated - please confirm receipt"
+      - "What is the status of my payment from last week?"
+
+  invoice_management:
+    display_name: "Invoice Management"
+    description: "Customer communications regarding invoice corrections, updates, documentation requests, or processing issues"
+    business_value: "Identify invoice accuracy issues and processing bottlenecks"
+    coverage: "19.8%"  # 148 emails (clusters 22, 21, 0)
+    decision_rules:
+      - "Email requests invoice corrections or updates"
+      - "Email asks for invoice-related documentation (W9, PO, etc.)"
+      - "Email reports invoice processing issues"
+      - "Email requests invoice cancellation"
+    key_indicators:
+      - "provide a copy of your W9"
+      - "update product listed on the invoice"
+      - "cancel the invoice"
+      - "please advice us on the below"
+      - "looping in our AP team"
+    examples:
+      - "Please update the company name on invoice #INV123"
+      - "We need your W9 form to process payment"
+      - "Please cancel invoice #INV456 - duplicate billing"
+
+  information_request:
+    display_name: "Information Request"
+    description: "Customer seeks general information, clarification, or documentation not specifically related to payments or invoice corrections"
+    business_value: "Track information gaps and communication needs"
+    coverage: "7.1%"  # 26 emails (cluster 10)
+    decision_rules:
+      - "Email requests general information or clarification"
+      - "Email does not mention payment issues or invoice problems"
+      - "Email focuses on procedural or administrative questions"
+    key_indicators:
+      - "please find the attached draft quote"
+      - "please submit through Ariba"
+      - "your opinion matters"
+    examples:
+      - "How do we submit invoices through your portal?"
+      - "Please provide the contact for your accounts department"
+
+# SENTIMENT CATEGORIES
+# Consolidated from 4 categories into 3 distinct sentiment levels
+sentiment_categories:
+
+  cooperative:
+    display_name: "Cooperative"
+    description: "Customer demonstrates willingness to resolve issues, provides helpful information, or shows positive engagement"
+    business_value: "Identify engaged customers likely to resolve issues quickly"
+    coverage: "85.1%"  # 313 emails
+    decision_rules:
+      - "Customer offers to provide additional information"
+      - "Customer confirms payment actions or timeline"
+      - "Customer apologizes for delays or issues"
+      - "Customer actively works toward resolution"
+    key_indicators:
+      - "happy to provide"
+      - "apologies for the delays"
+      - "trying to resolve this"
+      - "let me know if you need"
+      - "payment has been initiated"
+    examples:
+      - "Apologies for the delay, payment will be processed tomorrow"
+      - "Happy to provide the W9 form you requested"
+      - "Let me loop in our AP team to resolve this quickly"
+
+  administrative:
+    display_name: "Administrative"
+    description: "Customer provides system/process status updates, cancellation requests, or reports operational issues"
+    business_value: "Flag for process review - may indicate system issues or operational improvements needed"
+    coverage: "7.9%"  # 29 emails (cluster 0)
+    decision_rules:
+      - "Email reports system or processing issues"
+      - "Email requests cancellations or corrections due to errors"
+      - "Email provides administrative status updates"
+      - "Email mentions processing delays or technical problems"
+    key_indicators:
+      - "cancel the invoice"
+      - "awaiting payment"
+      - "processed and currently awaiting"
+      - "unexpected error"
+      - "system issue"
+    examples:
+      - "Please cancel invoice #INV123 due to system error"
+      - "Invoice processed and currently awaiting final approval"
+      - "Unexpected error occurred during payment processing"
+
+  informational:
+    display_name: "Informational"
+    description: "Customer provides routine business updates, confirmations, or non-collection related communications"
+    business_value: "Standard processing - typically positive business communications"
+    coverage: "7.1%"  # 26 emails (cluster 10)
+    decision_rules:
+      - "Email confirms successful payment completion"
+      - "Email provides routine business updates or quotes"
+      - "Email requests feedback or procedural information"
+      - "Email is not directly collection-related"
+    key_indicators:
+      - "invoice has been paid"
+      - "please submit through"
+      - "draft quote attached"
+      - "opinion matters"
+      - "feedback request"
+    examples:
+      - "Your invoice has been paid via check #12345"
+      - "Please submit future invoices through our portal"
+      - "Please find attached draft quote as requested"
+
+  frustrated:
+    display_name: "Frustrated"
+    description: "Customer expresses dissatisfaction, urgency, or negative emotions (Note: Not observed in current dataset but included for completeness)"
+    business_value: "Flag for priority handling and relationship management"
+    coverage: "0%"  # Not observed in analyzed clusters
+    decision_rules:
+      - "Customer expresses dissatisfaction or frustration"
+      - "Customer uses urgent or demanding language"
+      - "Customer mentions escalation or complaints"
+    key_indicators:
+      - "unacceptable delay"
+      - "need immediate resolution"
+      - "escalating this issue"
+      - "extremely disappointed"
+    examples:
+      - "This is the third time I've requested this information"
+      - "Need immediate resolution - this delay is unacceptable"
+
+# MODIFIER FLAGS
+# Additional flags for special handling
+modifier_flags:
+
+  urgency:
+    description: "Communication indicates time-sensitive matter"
+    indicators: ["urgent", "asap", "immediately", "deadline", "overdue"]
+
+  escalation:
+    description: "Customer mentions involving management or external parties"
+    indicators: ["manager", "supervisor", "escalate", "complaint", "legal"]
+
+  payment_commitment:
+    description: "Customer makes specific payment promise or timeline"
+    indicators: ["will pay", "payment scheduled", "check sent", "processing payment"]
+
+# VALIDATION RULES
+validation_rules:
+  mutual_exclusivity:
+    - "Each email must have exactly one intent category"
+    - "Each email must have exactly one sentiment category"
+    - "Modifier flags are optional and non-exclusive"
+
+  confidence_thresholds:
+    high_confidence: "Clear indicators present, unambiguous categorization"
+    medium_confidence: "Some indicators present, minor ambiguity"
+    low_confidence: "Weak indicators, significant ambiguity - flag for human review"
+
+# BUSINESS MAPPING
+netsuite_integration:
+  collection_note_fields:
+    sentiment: "Maps to Collection Note Sentiment picklist"
+    intent: "Maps to Collection Note Category field"
+    modifiers: "Maps to Collection Note Priority/Flags fields"
+
+  automation_triggers:
+    cooperative_payment_inquiry: "Auto-acknowledge receipt, provide status update"
+    invoice_management: "Route to billing team, auto-request documentation"
+    frustrated: "Priority queue, assign to senior collector"

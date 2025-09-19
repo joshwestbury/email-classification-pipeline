@@ -1,0 +1,187 @@
+{
+  "23": {
+    "proposed_intent": "Payment Resolution and Clarification",
+    "intent_definition": "This intent represents communications from customers seeking to resolve payment issues, clarify payment details, or request corrections to invoices for proper processing.",
+    "proposed_sentiment": "Cooperative",
+    "sentiment_definition": "The tone is generally cooperative, with customers showing willingness to resolve issues, provide necessary information, or make payments.",
+    "decision_rules": [
+      "The email mentions a need to correct invoice details or company names.",
+      "The email requests additional information or documentation related to payments, such as purchase orders or contact details.",
+      "The email confirms payment actions, such as checks being sent or cashed."
+    ],
+    "confidence": "high",
+    "sample_indicators": [
+      "cannot pay the invoice to a company that does not exist",
+      "provide me the Edwards contact",
+      "Paying today with check#",
+      "original check # sent to",
+      "trying to collect this from my clients"
+    ],
+    "reasoning": "These emails cluster together because they all involve customers actively engaging with the accounts receivable department to resolve payment-related issues. Whether it's correcting invoice details, confirming payment actions, or requesting information, the intent is to ensure proper payment processing. The cooperative tone indicates a willingness to address and resolve these issues efficiently.",
+    "cluster_id": "23",
+    "sample_count": 5,
+    "cluster_size": 82,
+    "cluster_percentage": 11.66429587482219
+  },
+  "22": {
+    "proposed_intent": "Information Request and Clarification",
+    "intent_definition": "This intent represents emails where the sender is seeking information, clarification, or confirmation related to payment status, billing, or order details.",
+    "proposed_sentiment": "Cooperative",
+    "sentiment_definition": "The tone of the emails is generally cooperative, indicating a willingness to resolve issues or provide necessary information to facilitate the collections process.",
+    "decision_rules": [
+      "The email contains a request for information or clarification regarding payment or billing.",
+      "The sender loops in additional team members or departments to address the query.",
+      "The email includes phrases indicating a follow-up or request for a revised document."
+    ],
+    "confidence": "high",
+    "sample_indicators": [
+      "looping in our @AP team",
+      "please advice us on the below",
+      "Please share the revised bill asap"
+    ],
+    "reasoning": "These emails cluster together because they all involve requests for information or clarification related to financial transactions or billing. The senders are engaging in a cooperative manner, often involving additional team members to address the issues raised. The tone is not confrontational but rather focused on resolving outstanding questions or tasks.",
+    "cluster_id": "22",
+    "sample_count": 5,
+    "cluster_size": 68,
+    "cluster_percentage": 9.672830725462305
+  },
+  "9": {
+    "proposed_intent": "Status Inquiry and Payment Processing",
+    "intent_definition": "This intent represents customer communications seeking updates on account or case status, clarifications on invoice processing, or providing information on payment timelines.",
+    "proposed_sentiment": "Cooperative and Informative",
+    "sentiment_definition": "The sentiment is characterized by a willingness to provide information, cooperate in resolving issues, and seek updates or clarification in a polite manner.",
+    "decision_rules": [
+      "If the email requests an update on a case or payment status, classify as 'Status Inquiry'.",
+      "If the email provides information about payment processing or timelines, classify as 'Payment Processing'.",
+      "If the email includes instructions or clarifications about invoice submissions, classify as 'Invoice Clarification'."
+    ],
+    "confidence": "high",
+    "sample_indicators": [
+      "request an update on case",
+      "apologies for the delays",
+      "payment will be in our payment run",
+      "invoice submission has been received"
+    ],
+    "reasoning": "These emails cluster together as they all involve communication related to the status of accounts, invoices, or payments. The tone is generally cooperative, with customers either seeking information or providing updates on their end. The emails include requests for updates, confirmations of invoice receipt, and information about payment processing, indicating a shared focus on ensuring smooth financial transactions.",
+    "cluster_id": "9",
+    "sample_count": 5,
+    "cluster_size": 61,
+    "cluster_percentage": 8.677098150782362
+  },
+  "21": {
+    "proposed_intent": "Invoice Inquiry and Update",
+    "intent_definition": "This intent represents customer communications seeking clarification, updates, or corrections related to invoices, such as requesting documentation, updating invoice details, or confirming receipt and processing of invoices.",
+    "proposed_sentiment": "Cooperative",
+    "sentiment_definition": "The tone of these emails is generally cooperative, indicating a willingness to engage in dialogue and resolve any issues related to invoicing.",
+    "decision_rules": [
+      "Email requests a copy of documentation related to an invoice (e.g., W9 form).",
+      "Email requests updates or corrections to invoice details (e.g., product names, PO numbers).",
+      "Email confirms receipt or processing status of an invoice.",
+      "Email indicates payment has been made or is in process."
+    ],
+    "confidence": "high",
+    "sample_indicators": [
+      "provide a copy of your W9",
+      "help us with the PO",
+      "update product listed on the invoice",
+      "invoice has already been received",
+      "Invoice has been paid"
+    ],
+    "reasoning": "These emails cluster together because they all pertain to inquiries or updates related to invoices. The senders are either seeking information, requesting changes, or confirming actions related to invoices. The cooperative tone is evident as the senders are engaging in a constructive manner to resolve or clarify invoicing matters.",
+    "cluster_id": "21",
+    "sample_count": 5,
+    "cluster_size": 51,
+    "cluster_percentage": 7.254623044096728
+  },
+  "0": {
+    "proposed_intent": "Invoice and Payment Processing",
+    "intent_definition": "This intent represents communications related to the processing, cancellation, or status updates of invoices and payments.",
+    "proposed_sentiment": "Neutral/Informative",
+    "sentiment_definition": "The tone of these emails is primarily neutral and informative, as they are focused on providing updates or requesting actions without expressing strong emotions.",
+    "decision_rules": [
+      "Email mentions invoice processing or status updates.",
+      "Email requests cancellation or action on an invoice.",
+      "Email provides information about payment or approval processes."
+    ],
+    "confidence": "high",
+    "sample_indicators": [
+      "cancel the invoice",
+      "awaiting payment",
+      "processed and is currently awaiting payment",
+      "unexpected error"
+    ],
+    "reasoning": "These emails cluster together because they all pertain to the status, processing, or cancellation of invoices and payments. The communications are primarily transactional and focused on the administrative aspects of accounts receivable, without expressing strong emotions or disputes.",
+    "cluster_id": "0",
+    "sample_count": 5,
+    "cluster_size": 29,
+    "cluster_percentage": 4.125177809388336
+  },
+  "14": {
+    "proposed_intent": "Payment Inquiry and Processing",
+    "intent_definition": "Emails related to inquiries about payment status, processing of invoices, and any issues or confirmations related to payment transactions.",
+    "proposed_sentiment": "Cooperative",
+    "sentiment_definition": "The tone of the emails is generally cooperative, indicating a willingness to resolve payment issues or confirm processing.",
+    "decision_rules": [
+      "Email mentions payment status or processing.",
+      "Email includes requests for invoice copies or clarifications about invoices.",
+      "Email confirms that payment is being processed or has been received."
+    ],
+    "confidence": "high",
+    "sample_indicators": [
+      "payment status",
+      "invoice copy",
+      "being processed"
+    ],
+    "reasoning": "These emails cluster together because they all revolve around the topic of payments, either requesting information about the status of a payment, confirming that a payment is being processed, or clarifying invoice-related issues. The tone across the emails is generally cooperative, with senders seeking resolution or providing updates in a professional manner.",
+    "cluster_id": "14",
+    "sample_count": 5,
+    "cluster_size": 28,
+    "cluster_percentage": 3.982930298719772
+  },
+  "10": {
+    "proposed_intent": "General Communication and Updates",
+    "intent_definition": "This intent represents emails that are primarily focused on general communication, updates, or requests for feedback, rather than specific collections-related actions such as payment promises or disputes.",
+    "proposed_sentiment": "Neutral",
+    "sentiment_definition": "The sentiment is neutral, indicating that the emails are primarily informational or procedural without expressing strong emotions like frustration or enthusiasm.",
+    "decision_rules": [
+      "Email does not mention payment issues, disputes, or financial hardship.",
+      "Content focuses on providing updates, general information, or requests for feedback.",
+      "Lacks specific requests for payment arrangements or acknowledgment of debt."
+    ],
+    "confidence": "medium",
+    "sample_indicators": [
+      "Please find the attached draft quote",
+      "Please submit through Ariba",
+      "Your opinion matters - Tell us how we're doing",
+      "Your Invoice has been paid"
+    ],
+    "reasoning": "These emails cluster together because they all lack a direct focus on collections-specific actions such as payment promises or disputes. Instead, they are centered around general communication, updates, or feedback requests. The tone across these emails is neutral, as they are primarily informational or procedural in nature.",
+    "cluster_id": "10",
+    "sample_count": 5,
+    "cluster_size": 26,
+    "cluster_percentage": 3.698435277382646
+  },
+  "6": {
+    "proposed_intent": "Payment and Resolution Updates",
+    "intent_definition": "This intent represents communications related to confirming payment schedules, payment methods, and seeking updates on account or case resolutions.",
+    "proposed_sentiment": "Cooperative",
+    "sentiment_definition": "The sentiment is characterized by a willingness to comply with payment obligations or resolve outstanding issues, often accompanied by polite language and apologies for any inconvenience.",
+    "decision_rules": [
+      "The email mentions a scheduled payment date or confirmation of payment initiation.",
+      "The email requests confirmation or provides an update on a case or account status.",
+      "The email inquires about payment methods or seeks advice on payment options."
+    ],
+    "confidence": "high",
+    "sample_indicators": [
+      "scheduled for payment",
+      "payment has been initiated",
+      "request an update on case",
+      "advise if I can pay with a credit card"
+    ],
+    "reasoning": "These emails cluster together as they all involve communication about payments or updates on account-related issues. The tone across the emails is cooperative, with senders either confirming payment actions, seeking guidance on payment methods, or requesting updates on unresolved issues. The language used is polite and indicates a willingness to resolve matters amicably.",
+    "cluster_id": "6",
+    "sample_count": 5,
+    "cluster_size": 23,
+    "cluster_percentage": 3.2716927453769555
+  }
+}

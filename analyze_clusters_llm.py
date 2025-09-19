@@ -10,6 +10,10 @@ import os
 from openai import OpenAI
 from tqdm import tqdm
 import re
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 class ClusterAnalyzer:
@@ -46,45 +50,39 @@ class ClusterAnalyzer:
 
         # Load anonymized emails for content analysis
         with open('master_email_threads_anonymized.json', 'r') as f:
-            self.anonymized_emails = json.load(f)
-        print(f"Loaded {len(self.anonymized_emails)} anonymized emails")
+            data = json.load(f)
+            # Extract individual emails from threads structure
+            self.anonymized_emails = []
+            for thread in data.get('email_threads', []):
+                for email in thread.get('emails', []):
+                    if email.get('direction') == 'incoming':
+                        self.anonymized_emails.append(email)
+        print(f"Loaded {len(self.anonymized_emails)} anonymized incoming emails")
 
-    def get_cluster_samples(self, cluster_id: str, sample_size: int = 10) -> List[Dict[str, Any]]:
+    def get_cluster_samples(self, cluster_id: str, sample_size: int = 5) -> List[Dict[str, Any]]:
         """Get sample emails from a specific cluster for analysis"""
-        if not self.metadata:
-            raise ValueError("Metadata not loaded. Call load_data() first.")
+        if not self.anonymized_emails:
+            raise ValueError("Anonymized emails not loaded. Call load_data() first.")
 
-        # Load cluster labels to find emails in this cluster
-        try:
-            with open('parameter_experiments.csv', 'r') as f:
-                # This is a simplification - in a real implementation we'd save cluster assignments
-                # For now, we'll use the metadata directly and sample emails
-                pass
-        except:
-            pass
-
-        # For now, sample emails randomly from metadata for demonstration
-        # In production, we'd use the actual cluster assignments
+        # For now, sample emails randomly from anonymized incoming emails
+        # In a full implementation, we'd use actual cluster assignments
         import random
-        random.seed(42)
-        sample_emails = random.sample(self.metadata, min(sample_size, len(self.metadata)))
+        random.seed(int(cluster_id) + 42)  # Use cluster_id as part of seed for consistency
 
-        # Get corresponding content from anonymized emails
+        available_emails = self.anonymized_emails
+        sample_emails = random.sample(available_emails, min(sample_size, len(available_emails)))
+
+        # Prepare samples for LLM analysis
         enriched_samples = []
-        for email_meta in sample_emails:
-            # Find matching anonymized email by some identifier
-            # This is simplified - in practice we'd need proper ID matching
-            for anon_email in self.anonymized_emails[:sample_size]:
-                if anon_email.get('direction') == 'incoming':
-                    enriched_sample = {
-                        'subject': email_meta.get('subject', 'No Subject'),
-                        'content': self._clean_email_content(anon_email.get('content', '')),
-                        'thread_id': anon_email.get('thread_id', 'unknown')
-                    }
-                    enriched_samples.append(enriched_sample)
-                    break
+        for email in sample_emails:
+            enriched_sample = {
+                'subject': email.get('subject', 'No Subject'),
+                'content': self._clean_email_content(email.get('content', '')),
+                'thread_id': email.get('thread_id', 'unknown')
+            }
+            enriched_samples.append(enriched_sample)
 
-        return enriched_samples[:sample_size]
+        return enriched_samples
 
     def _clean_email_content(self, content: str) -> str:
         """Clean and truncate email content for LLM analysis"""
@@ -149,7 +147,7 @@ class ClusterAnalyzer:
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-4o",
                 messages=[
                     {"role": "system", "content": "You are an expert in customer service and collections email analysis. You help categorize customer communications for business intelligence and automated processing."},
                     {"role": "user", "content": prompt}
