@@ -165,7 +165,20 @@ class Anonymizer:
             'anonymization_stats': {}
         }
 
-        emails = data.get('emails', [])
+        # Handle both threaded and flat email structures
+        emails = []
+        if 'threads' in data:
+            # Extract emails from threaded structure
+            logger.info("Processing threaded email structure...")
+            for thread in data['threads']:
+                thread_emails = thread.get('emails', [])
+                emails.extend(thread_emails)
+            logger.info(f"Extracted {len(emails)} emails from {len(data['threads'])} threads")
+        else:
+            # Handle flat email structure (legacy format)
+            emails = data.get('emails', [])
+            logger.info(f"Processing flat email structure with {len(emails)} emails")
+
         self.stats['emails_processed'] = len(emails)
 
         for email in emails:

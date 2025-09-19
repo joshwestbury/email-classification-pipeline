@@ -39,7 +39,7 @@ class TaxonomyCurator:
 
         # Initialize sentence transformer for semantic similarity
         self.similarity_model = None
-        self.similarity_threshold = 0.92  # High threshold to preserve distinct business categories
+        self.similarity_threshold = 0.70  # Lower threshold to catch semantically similar categories like information updates
 
     def _get_similarity_model(self) -> SentenceTransformer:
         """Lazy load the sentence transformer model."""
@@ -66,16 +66,25 @@ class TaxonomyCurator:
         """Check if two categories have distinct business value that should be preserved."""
         # Business value keywords that should remain separate
         distinct_keywords = [
-            ('payment', 'invoice'),
-            ('payment', 'administrative'),
-            ('invoice', 'information'),
-            ('inquiry', 'management'),
-            ('status', 'request'),
-            ('follow', 'update')
+            ('payment', 'invoice'),      # Payment vs Invoice management are different
+            ('payment', 'dispute'),      # Payment vs Dispute handling are different
+            ('invoice', 'dispute'),      # Invoice vs Dispute are different
+            ('inquiry', 'management'),   # Inquiry vs Management are different
+            ('administrative', 'payment'), # Administrative vs Payment are different
+            ('administrative', 'dispute')  # Administrative vs Dispute are different
         ]
 
         cat1_lower = cat1_name.lower()
         cat2_lower = cat2_name.lower()
+
+        # Special case: "information update" variants should be merged
+        info_update_variants = ['information update', 'account information', 'update notification']
+        cat1_has_info_update = any(variant in cat1_lower for variant in info_update_variants)
+        cat2_has_info_update = any(variant in cat2_lower for variant in info_update_variants)
+
+        if cat1_has_info_update and cat2_has_info_update:
+            logger.debug(f"Both categories are information update variants: '{cat1_name}' and '{cat2_name}' - allowing merge")
+            return False  # Allow merging of information update variants
 
         for keyword1, keyword2 in distinct_keywords:
             if ((keyword1 in cat1_lower and keyword2 in cat2_lower) or
@@ -90,6 +99,7 @@ class TaxonomyCurator:
             threshold = self.similarity_threshold
 
         logger.info(f"Merging similar categories with threshold {threshold}")
+        logger.info(f"Input categories: {list(categories.keys())}")
 
         category_names = list(categories.keys())
         merged_categories = {}
@@ -97,7 +107,10 @@ class TaxonomyCurator:
 
         for i, category1 in enumerate(category_names):
             if category1 in processed:
+                logger.debug(f"Skipping '{category1}' - already processed")
                 continue
+
+            logger.info(f"Processing category '{category1}' for potential merges...")
 
             # Start with this category as the merge target
             merged_name = category1
@@ -106,11 +119,17 @@ class TaxonomyCurator:
 
             for j, category2 in enumerate(category_names[i+1:], i+1):
                 if category2 in processed:
+                    logger.debug(f"  Skipping '{category2}' - already processed")
                     continue
 
+                logger.debug(f"  Comparing '{category1}' with '{category2}'")
+
                 # Check if categories have distinct business value
-                if self._has_distinct_business_value(category1, category2):
-                    logger.debug(f"Preserving distinct business value: '{category1}' vs '{category2}'")
+                has_distinct_value = self._has_distinct_business_value(category1, category2)
+                logger.debug(f"    Business value check: {has_distinct_value} (True=distinct, False=can merge)")
+
+                if has_distinct_value:
+                    logger.debug(f"    SKIPPING: Preserving distinct business value between '{category1}' and '{category2}'")
                     continue
 
                 # Calculate similarity between descriptions
@@ -118,10 +137,10 @@ class TaxonomyCurator:
                 desc2 = categories[category2].get('definition', '')
 
                 similarity = self._calculate_semantic_similarity(desc1, desc2)
-                logger.debug(f"Similarity between '{category1}' and '{category2}': {similarity:.3f}")
+                logger.debug(f"    Semantic similarity: {similarity:.4f} (threshold: {threshold})")
 
                 if similarity > threshold:
-                    logger.info(f"Merging '{category2}' into '{category1}' (similarity: {similarity:.3f})")
+                    logger.info(f"    ✅ MERGING '{category2}' into '{category1}' (similarity: {similarity:.3f})")
                     similar_categories.append(category2)
 
                     # Merge data
@@ -135,6 +154,8 @@ class TaxonomyCurator:
                         merged_data['decision_rules'].extend(categories[category2]['decision_rules'])
 
                     processed.add(category2)
+                else:
+                    logger.info(f"    ❌ Not merging - similarity {similarity:.4f} below threshold {threshold}")
 
             # Use the most representative name (could be improved with better logic)
             if len(similar_categories) > 1:
@@ -682,8 +703,8 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
         logger.info(f"Extracted {len(intent_categories)} raw intent categories before consolidation")
 
         # Apply consolidation steps
-        # Step 1: Semantic similarity merging (high threshold to preserve business value)
-        consolidated_intents = self._merge_similar_categories(intent_categories, threshold=0.92)
+        # Step 1: Semantic similarity merging (lower threshold to catch similar information update variants)
+        consolidated_intents = self._merge_similar_categories(intent_categories, threshold=0.70)
 
         # Step 2: Business pattern consolidation
         final_intents = self._apply_business_consolidation_rules(consolidated_intents)

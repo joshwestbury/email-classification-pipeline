@@ -152,23 +152,165 @@ Latest pipeline run (`outputs/output_analysis_1/`) produces:
 
 **Pipeline Status**: Ready for Phase 2 development with quality category generation
 
-### 🎯 Phase 2 - Prototype Classifier (After Consolidation Fix)
+### 🔄 CURRENT FOCUS: Phase 2 Pipeline Improvements (PRIORITY)
 
-#### Upcoming Tasks
+**Issue Identified**: Current pipeline has accuracy limitations that need addressing before classifier development:
+- Only 191 incoming emails from 4,732 total (4% rate seems too low)
+- Limited sentiment diversity (only "Administrative" captured)
+- Categories too narrow and administrative-focused
+- Missing key collection-specific intents (payment disputes, hardship, etc.)
+
+#### Phase 2.1: Email Direction Classification Enhancement ⚡ **IMMEDIATE PRIORITY**
+
+1. **Analyze Current Classification Issues** 🔍
+   - [ ] Review email direction classification accuracy in `data_processor.py`
+   - [ ] Manually sample 50 emails marked as "outgoing" to verify correctness
+   - [ ] Identify patterns in misclassified customer emails
+   - [ ] Document specific cases where genuine customer emails are missed
+
+2. **Enhance Collection-Specific Pattern Recognition** 🎯
+   - [ ] Add collection-specific incoming patterns to `_classify_with_confidence()`:
+     - Payment-related: "payment plan", "financial hardship", "dispute charge", "cannot pay"
+     - Information requests: "account balance", "payment history", "invoice question"
+     - Acknowledgments: "received invoice", "will pay by", "making payment"
+   - [ ] Implement sentiment-aware classification (frustrated customers more likely incoming)
+   - [ ] Add entity-based classification (mentions of amounts, dates, account numbers)
+
+3. **Implement Multi-Factor Validation** 🔧
+   - [ ] Create `CollectionEmailClassifier` class with confidence scoring
+   - [ ] Add thread-context analysis (conversation flow patterns)
+   - [ ] Implement business-logic validation (invoice -> customer response patterns)
+   - [ ] Add length-based heuristics (very short emails likely fragments)
+
+4. **Testing and Validation** ✅
+   - [ ] Test enhanced classification on existing dataset
+   - [ ] Target: Increase incoming email detection by 50-100% while maintaining precision
+   - [ ] Create validation set of 100 manually labeled emails
+   - [ ] Achieve >90% accuracy on validation set
+
+#### Phase 2.2: Enhanced Clustering and Sentiment Detection 📊
+
+5. **Multi-Dimensional Clustering Approach** 🎪
+   - [ ] Implement hierarchical clustering in `clusterer.py`:
+     - Stage 1: Broad intent categories (min_cluster_size=8)
+     - Stage 2: Sentiment sub-clusters within each intent (min_cluster_size=3)
+   - [ ] Adjust UMAP parameters for finer granularity:
+     - `n_neighbors=10` (from 15), `min_dist=0.05` (from 0.1)
+     - `n_components=30` (from 50), add `cluster_selection_epsilon=0.3`
+
+6. **Collection-Specific Sentiment Analysis** 😊😠😐
+   - [ ] Create `SentimentAnalyzer` class in new `pipeline/sentiment_analyzer.py`
+   - [ ] Implement pattern-based sentiment detection:
+     - **Frustrated**: "unacceptable", "ridiculous", "fed up", "still waiting"
+     - **Cooperative**: "working with you", "happy to provide", "trying to resolve"
+     - **Apologetic**: "apologize", "sorry for", "regret delay", "my fault"
+     - **Urgent**: "need immediately", "asap", "time sensitive"
+     - **Confused**: "don't understand", "unclear why", "please explain"
+   - [ ] Add confidence scoring for each sentiment (0.0-1.0)
+   - [ ] Integrate sentiment analysis into clustering pipeline
+
+7. **Entity Extraction for Collections** 💰📅
+   - [ ] Create `CollectionEntityExtractor` class in `pipeline/entity_extractor.py`
+   - [ ] Extract key entities:
+     - Payment amounts (`$X,XXX.XX`, `USD X`, etc.)
+     - Payment dates (`by March 15`, `within 30 days`, etc.)
+     - Invoice numbers (`INV-12345`, `Invoice #XXX`, etc.)
+     - Account numbers (masked patterns)
+     - Urgency indicators (`urgent`, `ASAP`, `immediately`)
+   - [ ] Store extracted entities in email metadata for classification
+
+#### Phase 2.3: Advanced LLM Analysis and Prompting 🤖
+
+8. **Enhanced Prompt Engineering** ✍️
+   - [ ] Rewrite LLM analysis prompts in `analyzer.py` with collection context:
+     - Add collection business priorities (payment commitment, disputes, hardship)
+     - Include specific intent categories (Payment Inquiry, Dispute, Arrangement Request)
+     - Add sentiment context (frustrated customers, cooperative responses)
+   - [ ] Implement few-shot prompting with real examples
+   - [ ] Add structured output requirements (JSON schema enforcement)
+
+9. **Context-Aware Thread Analysis** 🧵
+   - [ ] Enhance `_analyze_thread_conversation_pattern()` in `data_processor.py`
+   - [ ] Add conversation flow analysis:
+     - Invoice → Customer Response → Resolution patterns
+     - Escalation patterns (customer → manager → legal mentions)
+     - Payment commitment tracking across thread
+   - [ ] Implement thread-level sentiment progression analysis
+
+10. **Business Logic Integration** 💼
+    - [ ] Create `BusinessLogicValidator` class in `pipeline/business_validator.py`
+    - [ ] Implement collection-specific validation rules:
+      - Payment promises must have timeline/amount
+      - Disputes must reference specific charges/invoices
+      - Hardship claims should mention financial circumstances
+    - [ ] Add actionability scoring for collection teams
+
+#### Phase 2.4: Quality Metrics and Validation 📈
+
+11. **Automated Quality Assessment** 🔬
+    - [ ] Create `TaxonomyQualityAssessor` class in `pipeline/quality_assessor.py`
+    - [ ] Implement quality metrics:
+      - **Category Coverage**: Distribution across intent/sentiment categories
+      - **Semantic Coherence**: Intra-cluster similarity vs inter-cluster distance
+      - **Business Relevance**: Alignment with collection team priorities
+      - **Actionability**: Clear next steps for each category
+    - [ ] Generate quality reports with recommendations
+
+12. **Validation Framework** ✅
+    - [ ] Create ground truth dataset (200+ manually labeled emails)
+    - [ ] Implement automated validation pipeline
+    - [ ] Generate confusion matrices and performance metrics
+    - [ ] Target metrics: >85% precision, >80% recall on top 5 categories
+
+13. **A/B Testing Framework** 🧪
+    - [ ] Implement parameter optimization testing
+    - [ ] Compare current vs enhanced pipeline performance
+    - [ ] Test different clustering parameters and prompt variations
+    - [ ] Document performance improvements quantitatively
+
+#### Implementation Priority Order
+
+**Week 1**: Phase 2.1 (Email Direction Classification)
+- Fix the core issue of missing customer emails
+- This will immediately improve data quality for downstream analysis
+
+**Week 2**: Phase 2.2 (Clustering and Sentiment)
+- Enhanced clustering for better category discovery
+- Multi-sentiment detection beyond just "Administrative"
+
+**Week 3**: Phase 2.3 (LLM Enhancement)
+- Improved prompts and business logic integration
+- Context-aware analysis for better categorization
+
+**Week 4**: Phase 2.4 (Quality and Validation)
+- Automated quality assessment and validation framework
+- Performance measurement and optimization
+
+### 🎯 Phase 2 Success Criteria (Updated)
+
+- [ ] **Data Quality**: Increase incoming email detection to 300-500 emails (vs current 191)
+- [ ] **Sentiment Diversity**: Capture 4-6 distinct sentiment categories (vs current 1)
+- [ ] **Intent Granularity**: Generate 6-8 actionable intent categories with business relevance
+- [ ] **Classification Accuracy**: Achieve >85% precision on validation set
+- [ ] **Business Utility**: Clear action items for collection teams for each category
+
+### 🎯 Phase 3 - Prototype Classifier (After Pipeline Improvements)
+
+#### Upcoming Tasks (Post-Improvements)
 
 1. **JSON Schema Definition** 📋
    - [ ] Define strict JSON schema for model outputs
    - [ ] Include intent, tone, modifiers, entities, rationale fields
    - [ ] Validate schema against expected use cases
 
-2. **Prompt Engineering** ✍️
+2. **Few-Shot Prompt Engineering** ✍️
    - [ ] Design few-shot prompts with system instructions
-   - [ ] Create examples for each category
-   - [ ] Test prompt effectiveness on sample data
+   - [ ] Create examples for each category using improved taxonomy
+   - [ ] Test prompt effectiveness on enhanced dataset
 
 3. **Manual Labeling for Validation** 🏷️
-   - [ ] Select 150-250 email subset for ground truth
-   - [ ] Manually label emails using developed taxonomy
+   - [ ] Select 150-250 email subset for ground truth (from improved dataset)
+   - [ ] Manually label emails using enhanced taxonomy
    - [ ] Create validation dataset for model testing
 
 4. **Model Performance Testing** 📈
@@ -177,7 +319,7 @@ Latest pipeline run (`outputs/output_analysis_1/`) produces:
    - [ ] Target ≥85% precision on top intent categories
    - [ ] Iterate and refine based on performance
 
-#### Phase 2 Deliverables
+#### Phase 3 Deliverables
 
 - [ ] **`response_schema.json`** — Strict JSON schema for model output
 - [ ] **`emails_labeled.csv`** — Ground-truth labeled subset
@@ -283,18 +425,44 @@ scg-ai-collection-notes/
 
 ### 🚀 Next Immediate Action
 
-**Phase 2: Prototype Classifier Development**
-- Pipeline infrastructure complete with quality category generation
-- Ready to begin classifier development using generated taxonomy
-- Use `outputs/output_analysis_1/taxonomy.yaml` as the reference taxonomy
-- Begin with JSON schema definition and prompt engineering
+**PRIORITY: Phase 2.1 Email Direction Classification Enhancement**
 
-**Pipeline Usage**:
+**Current Issue**: Only 191 incoming emails detected from 4,732 total (4% rate) - likely missing many genuine customer communications.
+
+**Immediate Tasks**:
+1. **Diagnostic Analysis** (Day 1-2):
+   ```bash
+   # Sample and manually review emails marked as outgoing
+   uv run python -c "
+   import json
+   with open('outputs/output_analysis_1/processed_emails.json') as f:
+       data = json.load(f)
+
+   outgoing = [e for e in data['threads'] for email in e['emails'] if email['direction'] == 'outgoing']
+   # Manually review sample of 50 emails to identify misclassifications
+   "
+   ```
+
+2. **Enhanced Pattern Implementation** (Day 3-5):
+   - Modify `pipeline/data_processor.py` `_classify_with_confidence()` method
+   - Add collection-specific incoming patterns
+   - Test on current dataset and measure improvement
+
+3. **Validation and Testing** (Day 6-7):
+   - Create validation set of 100 manually labeled emails
+   - Test enhanced classification accuracy
+   - Target: 300-500 incoming emails (2-3x improvement)
+
+**Expected Outcome**:
+- Significantly more comprehensive customer email dataset
+- Better foundation for downstream clustering and taxonomy generation
+
+**Pipeline Re-run Command** (after improvements):
 ```bash
-# Generate new analysis with auto-numbered directory
+# Test enhanced classification on current dataset
 uv run python run_pipeline.py --input "Collection Notes - Sentiment Analysis/CollectionNotes_SentimentAnalysis_SampleEmails.json"
 
-# Output will be in outputs/output_analysis_2/ (next available number)
+# Output will be in outputs/output_analysis_2/ with improved email detection
 ```
 
 ---
