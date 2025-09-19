@@ -551,8 +551,16 @@ class DataProcessor:
 
             # Validate message content before processing - filter out whitespace-only content
             if message_content and message_content.strip():
-                # Must contain at least one letter or number
-                if not re.search(r'[a-zA-Z0-9]', message_content):
+                # Unescape common escape sequences to check actual content
+                unescaped_content = message_content.replace('\\r', '\r').replace('\\n', '\n').replace('\\t', '\t')
+
+                # Check if unescaped content is just whitespace
+                if not unescaped_content.strip():
+                    logger.debug(f"Skipping email {email.get('id')} with escaped whitespace-only content: {repr(message_content[:50])}")
+                    continue
+
+                # Must contain at least one letter or number (after unescaping)
+                if not re.search(r'[a-zA-Z0-9]', unescaped_content):
                     logger.debug(f"Skipping email {email.get('id')} with whitespace-only content: {repr(message_content[:50])}")
                     continue
             elif message_content:
@@ -570,7 +578,16 @@ class DataProcessor:
                     if not thread_content or not thread_content.strip():
                         logger.debug(f"Skipping thread email {i} with insufficient content")
                         continue
-                    if not re.search(r'[a-zA-Z0-9]', thread_content):
+
+                    # Unescape common escape sequences to check actual content
+                    unescaped_thread_content = thread_content.replace('\\r', '\r').replace('\\n', '\n').replace('\\t', '\t')
+
+                    # Check if unescaped content is just whitespace
+                    if not unescaped_thread_content.strip():
+                        logger.debug(f"Skipping thread email {i} with escaped whitespace-only content")
+                        continue
+
+                    if not re.search(r'[a-zA-Z0-9]', unescaped_thread_content):
                         logger.debug(f"Skipping thread email {i} with whitespace-only content")
                         continue
 
@@ -1185,11 +1202,18 @@ class DataProcessor:
                     if field == 'message':
                         # Check if content is meaningful (not just whitespace/newlines)
                         if value and value.strip():
-                            # Must contain at least one letter or number
-                            if re.search(r'[a-zA-Z0-9]', value):
-                                extracted[field] = value
+                            # Unescape common escape sequences to check actual content
+                            unescaped_value = value.replace('\\r', '\r').replace('\\n', '\n').replace('\\t', '\t')
+
+                            # Check if unescaped content is just whitespace
+                            if not unescaped_value.strip():
+                                logger.debug(f"Filtered out escaped whitespace-only content: {repr(value[:50])}")
                             else:
-                                logger.debug(f"Filtered out whitespace-only message content: {repr(value[:50])}")
+                                # Must contain at least one letter or number (after unescaping)
+                                if re.search(r'[a-zA-Z0-9]', unescaped_value):
+                                    extracted[field] = value
+                                else:
+                                    logger.debug(f"Filtered out whitespace-only message content: {repr(value[:50])}")
                         else:
                             logger.debug(f"Filtered out empty/minimal message content: {repr(value)}")
                     elif value:  # For non-message fields, just check if non-empty

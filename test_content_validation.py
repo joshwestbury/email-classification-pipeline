@@ -14,12 +14,20 @@ def test_field_extraction_validation():
     def validate_message_content(value):
         """Apply the same validation logic as the fixed method."""
         if value and value.strip():
-            # Must contain at least one letter or number
-            if re.search(r'[a-zA-Z0-9]', value):
-                return True
-            else:
-                print(f"Filtered out whitespace-only message content: {repr(value[:50])}")
+            # Unescape common escape sequences to check actual content
+            unescaped_value = value.replace('\\r', '\r').replace('\\n', '\n').replace('\\t', '\t')
+
+            # Check if unescaped content is just whitespace
+            if not unescaped_value.strip():
+                print(f"Filtered out escaped whitespace-only content: {repr(value[:50])}")
                 return False
+            else:
+                # Must contain at least one letter or number (after unescaping)
+                if re.search(r'[a-zA-Z0-9]', unescaped_value):
+                    return True
+                else:
+                    print(f"Filtered out whitespace-only message content: {repr(value[:50])}")
+                    return False
         else:
             print(f"Filtered out empty/minimal message content: {repr(value)}")
             return False
@@ -33,7 +41,14 @@ def test_field_extraction_validation():
         "",
         "  ",
         "\r\n",
-        "   \n   \r   \n   "
+        "   \n   \r   \n   ",
+        # Escaped whitespace sequences (the main issue we're fixing)
+        "\\r\\n\\r\\n\\r\\n",
+        "\\r\\n\\r\\n\\r\\n\\r\\n",
+        "\\n\\n\\n",
+        "\\t\\t\\t",
+        "\\r\\n",
+        "   \\r\\n   \\r\\n   "
     ]
 
     # Test cases that should pass
@@ -91,21 +106,35 @@ def test_existing_data_analysis():
                 total_emails += 1
                 content = email.get('content', '')
 
-                # Apply the same filtering logic
+                # Apply the same filtering logic (with escaped sequence handling)
                 if content and content.strip():
-                    if not re.search(r'[a-zA-Z0-9]', content):
+                    # Unescape common escape sequences to check actual content
+                    unescaped_content = content.replace('\\r', '\r').replace('\\n', '\n').replace('\\t', '\t')
+
+                    # Check if unescaped content is just whitespace
+                    if not unescaped_content.strip():
                         would_be_filtered += 1
                         filter_examples.append({
                             'content': repr(content[:50]),
                             'length': len(content),
-                            'subject': email.get('subject', 'No subject')[:30]
+                            'subject': email.get('subject', 'No subject')[:30],
+                            'reason': 'escaped_whitespace'
+                        })
+                    elif not re.search(r'[a-zA-Z0-9]', unescaped_content):
+                        would_be_filtered += 1
+                        filter_examples.append({
+                            'content': repr(content[:50]),
+                            'length': len(content),
+                            'subject': email.get('subject', 'No subject')[:30],
+                            'reason': 'whitespace_only'
                         })
                 elif content:
                     would_be_filtered += 1
                     filter_examples.append({
                         'content': repr(content),
                         'length': len(content),
-                        'subject': email.get('subject', 'No subject')[:30]
+                        'subject': email.get('subject', 'No subject')[:30],
+                        'reason': 'empty_minimal'
                     })
 
         print(f"\n=== ANALYSIS OF EXISTING DATA ===")
@@ -116,7 +145,7 @@ def test_existing_data_analysis():
         if filter_examples:
             print(f"\nFirst 5 examples that would be filtered:")
             for i, example in enumerate(filter_examples[:5]):
-                print(f"{i+1}. {example['content']} (len: {example['length']}) - {example['subject']}")
+                print(f"{i+1}. {example['content']} (len: {example['length']}) - {example['subject']} [{example['reason']}]")
 
         return would_be_filtered
 
