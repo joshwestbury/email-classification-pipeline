@@ -132,11 +132,13 @@ class TaxonomyPipeline:
             umap_params={
                 'n_neighbors': self.config.umap_n_neighbors,
                 'min_dist': self.config.umap_min_dist,
-                'n_components': self.config.umap_n_components
+                'n_components': self.config.umap_n_components,
+                'random_state': 42
             },
             hdbscan_params={
                 'min_cluster_size': self.config.hdbscan_min_cluster_size,
-                'min_samples': self.config.hdbscan_min_samples
+                'min_samples': self.config.hdbscan_min_samples,
+                'metric': 'euclidean'
             }
         )
 
