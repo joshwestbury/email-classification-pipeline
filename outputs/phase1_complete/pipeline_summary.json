@@ -1,8 +1,8 @@
 {
-  "dataset": "phase1_rerun",
+  "dataset": "phase1_complete",
   "config": {
     "input_file": "Collection Notes - Sentiment Analysis/CollectionNotes_SentimentAnalysis_SampleEmails.json",
-    "dataset_name": "phase1_rerun",
+    "dataset_name": "phase1_complete",
     "clean_html": true,
     "anonymize_pii": true,
     "separate_threads": true,
@@ -24,10 +24,10 @@
     "categories_proposed": 0
   },
   "output_files": [
-    "outputs/phase1_rerun/processed_emails.json",
-    "outputs/phase1_rerun/anonymized_emails.json",
-    "outputs/phase1_rerun/embeddings",
-    "outputs/phase1_rerun/cluster_results.json",
-    "outputs/phase1_rerun/taxonomy_analysis.json"
+    "outputs/phase1_complete/processed_emails.json",
+    "outputs/phase1_complete/anonymized_emails.json",
+    "outputs/phase1_complete/embeddings",
+    "outputs/phase1_complete/cluster_results.json",
+    "outputs/phase1_complete/taxonomy_analysis.json"
   ]
 }

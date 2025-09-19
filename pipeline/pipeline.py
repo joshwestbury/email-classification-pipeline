@@ -14,6 +14,7 @@ from .anonymizer import Anonymizer
 from .embedder import Embedder
 from .clusterer import Clusterer
 from .analyzer import LLMAnalyzer
+from .curator import TaxonomyCurator
 
 
 class TaxonomyPipeline:
@@ -61,7 +62,12 @@ class TaxonomyPipeline:
         # Step 5: LLM Analysis
         self.logger.info("Step 5: Analyzing clusters with LLM...")
         analysis_results = self._run_llm_analysis()
-        self.state['taxonomy'] = analysis_results
+        self.state['llm_analysis'] = analysis_results
+
+        # Step 6: Taxonomy Curation
+        self.logger.info("Step 6: Curating final taxonomy...")
+        curation_results = self._run_taxonomy_curation()
+        self.state['taxonomy'] = curation_results
 
         self.logger.info("Pipeline completed successfully!")
         return self._generate_summary()
@@ -176,6 +182,19 @@ class TaxonomyPipeline:
             analyzer.save_results(analysis_results, str(output_path))
 
         return analysis_results
+
+    def _run_taxonomy_curation(self) -> Dict[str, Any]:
+        """Run taxonomy curation step."""
+        curator = TaxonomyCurator()
+
+        analysis_results = self.state['llm_analysis']
+        curation_results = curator.curate_taxonomy(analysis_results)
+
+        if self.config.save_intermediate:
+            output_dir = self.config.get_output_path('')
+            curator.save_results(curation_results, output_dir)
+
+        return curation_results
 
     def _generate_summary(self) -> Dict[str, Any]:
         """Generate a summary of the pipeline run."""

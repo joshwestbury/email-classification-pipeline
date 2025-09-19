@@ -11,6 +11,7 @@ from .anonymizer import Anonymizer
 from .embedder import Embedder
 from .clusterer import Clusterer
 from .analyzer import LLMAnalyzer
+from .curator import TaxonomyCurator
 
 __version__ = "1.0.0"
 __all__ = [
@@ -21,5 +22,6 @@ __all__ = [
     "Anonymizer",
     "Embedder",
     "Clusterer",
-    "LLMAnalyzer"
+    "LLMAnalyzer",
+    "TaxonomyCurator"
 ]
