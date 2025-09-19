@@ -75,13 +75,119 @@ class DataProcessor:
 
         return separated_emails
 
+    def parse_malformed_json(self, content: str) -> List[Dict[str, Any]]:
+        """Parse malformed JSON that may have unescaped quotes in string values."""
+        records = []
+
+        # Find array boundaries
+        content = content.strip()
+        if not (content.startswith('[') and content.endswith(']')):
+            logger.error("Invalid JSON format: not an array")
+            return []
+
+        # Remove outer brackets
+        inner_content = content[1:-1].strip()
+
+        # Split by record boundaries using state machine
+        record_texts = []
+        depth = 0
+        current_record = ""
+        in_string = False
+        escape_next = False
+
+        for char in inner_content:
+            if escape_next:
+                current_record += char
+                escape_next = False
+                continue
+
+            if char == '\\':
+                escape_next = True
+                current_record += char
+                continue
+
+            if char == '"' and not escape_next:
+                in_string = not in_string
+
+            if not in_string:
+                if char == '{':
+                    depth += 1
+                elif char == '}':
+                    depth -= 1
+
+            current_record += char
+
+            # If we're at depth 0 and find a comma, we've completed a record
+            if depth == 0 and char == ',' and not in_string:
+                record_texts.append(current_record[:-1].strip())  # Remove the comma
+                current_record = ""
+
+        # Add the last record
+        if current_record.strip():
+            record_texts.append(current_record.strip())
+
+        logger.info(f"Found {len(record_texts)} potential records to parse")
+
+        # Parse each record individually
+        for i, record_text in enumerate(record_texts):
+            try:
+                # Wrap in braces if needed
+                if not record_text.strip().startswith('{'):
+                    record_text = '{' + record_text + '}'
+
+                record = json.loads(record_text)
+                records.append(record)
+            except json.JSONDecodeError as e:
+                logger.warning(f"Failed to parse record {i+1}: {e}")
+                # Try to fix unescaped quotes
+                try:
+                    fixed_record = self._fix_unescaped_quotes(record_text)
+                    record = json.loads(fixed_record)
+                    records.append(record)
+                    logger.info(f"Successfully repaired record {i+1}")
+                except Exception as repair_error:
+                    logger.error(f"Could not repair record {i+1}: {repair_error}")
+                    continue
+
+        return records
+
+    def _fix_unescaped_quotes(self, record_text: str) -> str:
+        """Attempt to fix unescaped quotes in JSON record text."""
+        lines = record_text.split('\n')
+        fixed_lines = []
+        in_message_field = False
+
+        for line in lines:
+            if '"message":' in line:
+                in_message_field = True
+            elif in_message_field and line.strip().startswith('"') and (line.strip().endswith('"}') or line.strip().endswith('",')):
+                in_message_field = False
+
+            if in_message_field and '"message":' not in line:
+                # Inside message field - escape unescaped quotes
+                line = re.sub(r'(?<!\\)"(?!,\s*$)(?!\s*})', r'\\"', line)
+
+            fixed_lines.append(line)
+
+        return '\n'.join(fixed_lines)
+
     def process_emails(self, input_file: str) -> Dict[str, Any]:
         """Process raw email data through the complete pipeline."""
         logger.info(f"Processing emails from {input_file}")
 
-        # Load raw data
-        with open(input_file, 'r', encoding='utf-8') as f:
-            raw_data = json.load(f)
+        # Load raw data with robust JSON parsing
+        try:
+            with open(input_file, 'r', encoding='utf-8') as f:
+                raw_data = json.load(f)
+            logger.info("Successfully parsed JSON using standard parser")
+        except json.JSONDecodeError as e:
+            logger.warning(f"Standard JSON parsing failed: {e}")
+            logger.info("Attempting to parse malformed JSON...")
+
+            with open(input_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            raw_data = self.parse_malformed_json(content)
 
         # Handle different input formats
         if isinstance(raw_data, list):

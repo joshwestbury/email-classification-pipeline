@@ -1,0 +1,33 @@
+{
+  "dataset": "phase1_rerun",
+  "config": {
+    "input_file": "Collection Notes - Sentiment Analysis/CollectionNotes_SentimentAnalysis_SampleEmails.json",
+    "dataset_name": "phase1_rerun",
+    "clean_html": true,
+    "anonymize_pii": true,
+    "separate_threads": true,
+    "embedding_model": "all-MiniLM-L6-v2",
+    "include_thread_context": true,
+    "umap_n_neighbors": 15,
+    "umap_min_dist": 0.1,
+    "umap_n_components": 50,
+    "hdbscan_min_cluster_size": 5,
+    "hdbscan_min_samples": 3,
+    "openai_model": "gpt-4o",
+    "analyze_top_clusters": 8,
+    "output_dir": "outputs",
+    "save_intermediate": true
+  },
+  "results": {
+    "total_emails": 4697,
+    "clusters_found": 5,
+    "categories_proposed": 0
+  },
+  "output_files": [
+    "outputs/phase1_rerun/processed_emails.json",
+    "outputs/phase1_rerun/anonymized_emails.json",
+    "outputs/phase1_rerun/embeddings",
+    "outputs/phase1_rerun/cluster_results.json",
+    "outputs/phase1_rerun/taxonomy_analysis.json"
+  ]
+}

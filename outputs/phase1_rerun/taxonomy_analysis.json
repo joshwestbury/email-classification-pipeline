@@ -1,0 +1,279 @@
+{
+  "analysis_summary": {
+    "clusters_analyzed": 8,
+    "successful_analyses": 8,
+    "total_emails_in_analyzed_clusters": 2542,
+    "coverage_percentage": 58.2,
+    "model_used": "gpt-4o"
+  },
+  "cluster_analyses": {
+    "5": {
+      "proposed_intent": "Invoice Payment Request",
+      "intent_definition": "This intent represents emails sent to customers requesting payment for outstanding invoices, providing payment instructions and contact information for further assistance.",
+      "proposed_sentiment": "Administrative/Neutral",
+      "sentiment_definition": "The tone of these emails is formal and neutral, focusing on providing necessary payment details and instructions without expressing any emotion.",
+      "decision_rules": [
+        "Email contains an invoice number and amount due.",
+        "Email provides payment instructions, including ACH, wire transfer, or check.",
+        "Email includes contact information for billing updates or inquiries."
+      ],
+      "confidence": "high",
+      "sample_indicators": [
+        "Your invoice, #INV",
+        "Please remit payment according to the invoice terms",
+        "ACH or Wire Transfer",
+        "Contact lms.ar@litera.com"
+      ],
+      "reasoning": "These emails cluster together because they all serve the purpose of notifying customers about outstanding invoices and providing payment instructions. The consistent structure and language used across the emails indicate a standardized process for invoice communication.",
+      "business_relevance": "This category helps collections teams by identifying emails that are part of the routine billing process, allowing them to focus on ensuring timely payments and addressing any customer inquiries related to invoice payments.",
+      "cluster_id": "5",
+      "cluster_size": 897,
+      "cluster_percentage": 19.097296146476474,
+      "sample_count": 5
+    },
+    "58": {
+      "proposed_intent": "Invoice Delivery Notification",
+      "intent_definition": "This intent represents emails sent to notify customers about the delivery of an invoice, including instructions for updating billing and contact information.",
+      "proposed_sentiment": "Administrative/Neutral",
+      "sentiment_definition": "The sentiment is neutral and administrative, focusing on the straightforward delivery of information without any emotional undertones.",
+      "decision_rules": [
+        "Email subject contains 'Invoice' followed by an invoice number",
+        "Content includes a statement about an attached invoice",
+        "Includes contact information for updating billing details"
+      ],
+      "confidence": "high",
+      "sample_indicators": [
+        "Your invoice, #INV",
+        "is attached",
+        "Contact lms.ar@litera.com to update billing"
+      ],
+      "reasoning": "These emails cluster together because they all serve the purpose of notifying recipients about an invoice delivery. The structure and content are consistent across the samples, focusing on the attachment of an invoice and providing contact information for any updates.",
+      "business_relevance": "This category helps collections teams by identifying emails that are purely informational and do not require immediate action, allowing them to focus on more urgent collection matters.",
+      "cluster_id": "58",
+      "cluster_size": 366,
+      "cluster_percentage": 7.792207792207792,
+      "sample_count": 5
+    },
+    "28": {
+      "proposed_intent": "Payment Reminder Notification",
+      "intent_definition": "This intent represents emails sent to remind customers of upcoming invoice due dates and to prompt them to make payments before the deadline.",
+      "proposed_sentiment": "Administrative/Neutral",
+      "sentiment_definition": "The tone is formal and neutral, focusing on providing information and prompting action without expressing emotion.",
+      "decision_rules": [
+        "Email subject contains 'Reminder: Invoice'",
+        "Content includes a specific due date for payment",
+        "Mentions multiple payment options such as Credit Card, ACH, or Check",
+        "Requests notification if the invoice was not received or if payment will be delayed"
+      ],
+      "confidence": "high",
+      "sample_indicators": [
+        "Just a friendly reminder that the attached invoice is due",
+        "Please remit payment according to the invoice terms",
+        "Notify us if you have not received this invoice"
+      ],
+      "reasoning": "These emails cluster together because they all serve the same purpose of reminding customers about upcoming invoice due dates. They follow a similar structure and wording, focusing on prompting timely payment and offering multiple payment methods.",
+      "business_relevance": "This category helps collections teams by identifying emails that are purely informational and do not require immediate action beyond ensuring the customer is aware of the payment deadline. It allows the team to focus on more urgent or complex inquiries.",
+      "cluster_id": "28",
+      "cluster_size": 361,
+      "cluster_percentage": 7.685756866084735,
+      "sample_count": 5
+    },
+    "71": {
+      "proposed_intent": "Payment Reminder",
+      "intent_definition": "This intent represents emails sent to remind customers of overdue invoices and request payment or clarification on payment status.",
+      "proposed_sentiment": "Administrative/Neutral",
+      "sentiment_definition": "The tone of these emails is formal and neutral, focusing on providing information and requesting action without expressing emotion.",
+      "decision_rules": [
+        "Email subject contains 'Due - Reminder: Invoice'",
+        "Content includes a request for payment or remittance information",
+        "Mentions invoice details such as invoice number, date, due date, and amount due"
+      ],
+      "confidence": "high",
+      "sample_indicators": [
+        "Our records show that the attached invoice is now due",
+        "Please notify us if there are any issues with this invoice",
+        "If you have already sent us payment, please let us know the remittance information"
+      ],
+      "reasoning": "These emails cluster together because they all serve the purpose of reminding customers about overdue invoices and requesting payment or clarification on payment status. The language used is consistent across the emails, focusing on invoice details and payment requests.",
+      "business_relevance": "This category helps collections teams by identifying emails that are reminders for overdue payments, allowing them to prioritize follow-ups and ensure timely collections. It also aids in automating the process of sending reminders and tracking responses.",
+      "cluster_id": "71",
+      "cluster_size": 337,
+      "cluster_percentage": 7.174792420694059,
+      "sample_count": 5
+    },
+    "83": {
+      "proposed_intent": "Payment Reminder",
+      "intent_definition": "Emails sent to remind customers of overdue invoices and request payment or notification of any issues preventing payment.",
+      "proposed_sentiment": "Administrative/Neutral",
+      "sentiment_definition": "The tone is formal and neutral, focusing on administrative tasks such as reminding and requesting information without expressing emotion.",
+      "decision_rules": [
+        "Email subject contains 'Due - Reminder: Invoice'",
+        "Content includes a request for payment or notification of issues",
+        "Mentions invoice details such as invoice number, date, due date, and amount due"
+      ],
+      "confidence": "high",
+      "sample_indicators": [
+        "Our records show that the attached invoice is now due",
+        "Please notify us if there are any issues with this invoice",
+        "If you have already sent us payment, please let us know the remittance information"
+      ],
+      "reasoning": "These emails cluster together because they all serve the purpose of reminding customers about overdue invoices and requesting payment or communication regarding any issues. The language used is consistent across the emails, focusing on administrative details and requests.",
+      "business_relevance": "This category helps collections teams by identifying emails that require follow-up actions to ensure payment is received or to address any issues preventing payment. It streamlines the process of managing overdue accounts and facilitates timely communication with customers.",
+      "cluster_id": "83",
+      "cluster_size": 222,
+      "cluster_percentage": 4.726421119863742,
+      "sample_count": 5
+    },
+    "8": {
+      "proposed_intent": "Invoice Delivery",
+      "intent_definition": "This intent represents emails sent to customers containing invoices for payment, detailing the amount due and payment instructions.",
+      "proposed_sentiment": "Administrative/Neutral",
+      "sentiment_definition": "The sentiment is neutral and administrative, focusing on the delivery of information without any emotional tone or urgency.",
+      "decision_rules": [
+        "Email contains an invoice number in the subject line.",
+        "Email content includes a request for payment according to invoice terms.",
+        "Email provides payment options such as ACH or Wire Transfer."
+      ],
+      "confidence": "high",
+      "sample_indicators": [
+        "Your invoice, #INV",
+        "Please remit payment according to the invoice terms",
+        "ACH or Wire Transfer"
+      ],
+      "reasoning": "These emails cluster together because they all serve the purpose of delivering invoices to customers, requesting payment, and providing payment instructions. The structure and language are consistent across the emails, indicating a standardized communication format.",
+      "business_relevance": "This category helps collections teams by identifying and managing outgoing invoice communications, ensuring that customers receive their invoices promptly and have clear instructions on how to make payments. It also aids in tracking which invoices have been sent and potentially following up on unpaid invoices.",
+      "cluster_id": "8",
+      "cluster_size": 127,
+      "cluster_percentage": 2.7038535235256544,
+      "sample_count": 5
+    },
+    "65": {
+      "proposed_intent": "Payment Processing and Service Suspension Resolution",
+      "intent_definition": "This intent represents communications focused on resolving issues related to payment processing and addressing potential or actual service suspensions due to unpaid invoices.",
+      "proposed_sentiment": "Cooperative/Willing to Resolve",
+      "sentiment_definition": "The tone of these emails is generally cooperative, with parties expressing a willingness to resolve payment issues and prevent service disruptions.",
+      "decision_rules": [
+        "Emails mention service suspension or pending suspension due to unpaid invoices.",
+        "Emails include inquiries or confirmations about payment processing status.",
+        "Emails discuss discrepancies or issues with invoice details that affect payment processing."
+      ],
+      "confidence": "high",
+      "sample_indicators": [
+        "service suspension pending",
+        "payment will be processed",
+        "invoice is not matching",
+        "process payment asap"
+      ],
+      "reasoning": "These emails cluster together because they all revolve around resolving payment issues to prevent or address service suspensions. The communications involve confirmations of payment processing, addressing discrepancies in invoice details, and requests for prompt payment to avoid service interruptions.",
+      "business_relevance": "This category helps collections teams by identifying emails that require immediate attention to resolve payment issues and prevent service disruptions, ensuring continuous service and maintaining customer relationships.",
+      "cluster_id": "65",
+      "cluster_size": 123,
+      "cluster_percentage": 2.6186927826272086,
+      "sample_count": 5
+    },
+    "82": {
+      "proposed_intent": "Payment Reminder",
+      "intent_definition": "This intent represents emails sent to remind customers of overdue invoices and request payment or confirmation of payment details.",
+      "proposed_sentiment": "Administrative/Neutral",
+      "sentiment_definition": "The tone is formal and neutral, focusing on administrative details without expressing emotion or judgment.",
+      "decision_rules": [
+        "Email subject contains 'Due - Reminder: Invoice'",
+        "Content includes a request for payment or confirmation of payment details",
+        "Mentions invoice number, due date, and amount due"
+      ],
+      "confidence": "high",
+      "sample_indicators": [
+        "Our records show that the attached invoice is now due",
+        "Please notify us if there are any issues with this invoice",
+        "If you have already sent us payment, please let us know the remittance information"
+      ],
+      "reasoning": "These emails are clustered together because they all serve the purpose of reminding customers about overdue invoices and requesting payment or confirmation of payment. The language used is consistent across the emails, focusing on administrative details and maintaining a neutral tone.",
+      "business_relevance": "This category helps collections teams efficiently identify and process payment reminders, ensuring timely follow-up with customers to improve cash flow and reduce outstanding receivables.",
+      "cluster_id": "82",
+      "cluster_size": 109,
+      "cluster_percentage": 2.3206301894826487,
+      "sample_count": 5
+    }
+  },
+  "proposed_taxonomy": {
+    "intent_categories": {
+      "Invoice Payment Request": {
+        "definition": "This intent represents emails sent to customers requesting payment for outstanding invoices, providing payment instructions and contact information for further assistance.",
+        "clusters": [
+          "5"
+        ],
+        "total_emails": 897
+      },
+      "Invoice Delivery Notification": {
+        "definition": "This intent represents emails sent to notify customers about the delivery of an invoice, including instructions for updating billing and contact information.",
+        "clusters": [
+          "58"
+        ],
+        "total_emails": 366
+      },
+      "Payment Reminder Notification": {
+        "definition": "This intent represents emails sent to remind customers of upcoming invoice due dates and to prompt them to make payments before the deadline.",
+        "clusters": [
+          "28"
+        ],
+        "total_emails": 361
+      },
+      "Payment Reminder": {
+        "definition": "This intent represents emails sent to remind customers of overdue invoices and request payment or clarification on payment status.",
+        "clusters": [
+          "71",
+          "83",
+          "82"
+        ],
+        "total_emails": 668
+      },
+      "Invoice Delivery": {
+        "definition": "This intent represents emails sent to customers containing invoices for payment, detailing the amount due and payment instructions.",
+        "clusters": [
+          "8"
+        ],
+        "total_emails": 127
+      },
+      "Payment Processing and Service Suspension Resolution": {
+        "definition": "This intent represents communications focused on resolving issues related to payment processing and addressing potential or actual service suspensions due to unpaid invoices.",
+        "clusters": [
+          "65"
+        ],
+        "total_emails": 123
+      }
+    },
+    "sentiment_categories": {
+      "Administrative/Neutral": {
+        "definition": "The tone of these emails is formal and neutral, focusing on providing necessary payment details and instructions without expressing any emotion.",
+        "clusters": [
+          "5",
+          "58",
+          "28",
+          "71",
+          "83",
+          "8",
+          "82"
+        ],
+        "total_emails": 2419
+      },
+      "Cooperative/Willing to Resolve": {
+        "definition": "The tone of these emails is generally cooperative, with parties expressing a willingness to resolve payment issues and prevent service disruptions.",
+        "clusters": [
+          "65"
+        ],
+        "total_emails": 123
+      }
+    }
+  },
+  "clustering_stats": {
+    "n_clusters": 101,
+    "n_noise": 331,
+    "noise_ratio": 0.07047051309346392,
+    "silhouette_score": 0.41674935817718506,
+    "total_points": 4697
+  },
+  "configuration": {
+    "model": "gpt-4o",
+    "top_clusters_analyzed": 8
+  }
+}

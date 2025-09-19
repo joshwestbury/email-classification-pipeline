@@ -13,6 +13,10 @@ from tqdm import tqdm
 import re
 import random
 import logging
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
