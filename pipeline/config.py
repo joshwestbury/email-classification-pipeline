@@ -4,6 +4,7 @@ Configuration management for the email taxonomy pipeline.
 """
 
 import yaml
+import re
 from pathlib import Path
 from typing import Dict, Any, Optional
 from dataclasses import dataclass, asdict
@@ -64,8 +65,34 @@ class ConfigManager:
     """Manages pipeline configurations and templates."""
 
     @staticmethod
-    def create_default_config(dataset_name: str, input_file: str) -> PipelineConfig:
+    def _get_next_analysis_number(output_dir: str = "outputs") -> int:
+        """Get the next available analysis number for auto-naming."""
+        output_path = Path(output_dir)
+
+        if not output_path.exists():
+            return 1
+
+        # Find all existing directories with pattern "output_analysis_{number}"
+        pattern = re.compile(r'^output_analysis_(\d+)$')
+        max_number = 0
+
+        for item in output_path.iterdir():
+            if item.is_dir():
+                match = pattern.match(item.name)
+                if match:
+                    number = int(match.group(1))
+                    max_number = max(max_number, number)
+
+        return max_number + 1
+
+    @staticmethod
+    def create_default_config(dataset_name: str, input_file: str, auto_number: bool = True) -> PipelineConfig:
         """Create a default configuration for a new dataset."""
+        if auto_number:
+            # Generate auto-numbered dataset name
+            next_number = ConfigManager._get_next_analysis_number()
+            dataset_name = f"output_analysis_{next_number}"
+
         return PipelineConfig(
             dataset_name=dataset_name,
             input_file=input_file

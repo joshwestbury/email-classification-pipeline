@@ -7,9 +7,12 @@ Converts LLM analysis results into final curated taxonomy files.
 
 import json
 import yaml
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Tuple
 from pathlib import Path
 import logging
+import re
+from sentence_transformers import SentenceTransformer
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +36,232 @@ class TaxonomyCurator:
                 'Frustrated': ['frustrated', 'angry', 'dissatisfied']
             }
         }
+
+        # Initialize sentence transformer for semantic similarity
+        self.similarity_model = None
+        self.similarity_threshold = 0.92  # High threshold to preserve distinct business categories
+
+    def _get_similarity_model(self) -> SentenceTransformer:
+        """Lazy load the sentence transformer model."""
+        if self.similarity_model is None:
+            logger.info("Loading sentence transformer model for semantic similarity...")
+            self.similarity_model = SentenceTransformer('all-MiniLM-L6-v2')
+        return self.similarity_model
+
+    def _calculate_semantic_similarity(self, text1: str, text2: str) -> float:
+        """Calculate semantic similarity between two texts using sentence transformers."""
+        model = self._get_similarity_model()
+        embeddings = model.encode([text1, text2])
+
+        # Calculate cosine similarity using numpy
+        vec1, vec2 = embeddings[0], embeddings[1]
+        dot_product = np.dot(vec1, vec2)
+        norm1 = np.linalg.norm(vec1)
+        norm2 = np.linalg.norm(vec2)
+        similarity = dot_product / (norm1 * norm2)
+
+        return float(similarity)
+
+    def _has_distinct_business_value(self, cat1_name: str, cat2_name: str) -> bool:
+        """Check if two categories have distinct business value that should be preserved."""
+        # Business value keywords that should remain separate
+        distinct_keywords = [
+            ('payment', 'invoice'),
+            ('payment', 'administrative'),
+            ('invoice', 'information'),
+            ('inquiry', 'management'),
+            ('status', 'request'),
+            ('follow', 'update')
+        ]
+
+        cat1_lower = cat1_name.lower()
+        cat2_lower = cat2_name.lower()
+
+        for keyword1, keyword2 in distinct_keywords:
+            if ((keyword1 in cat1_lower and keyword2 in cat2_lower) or
+                (keyword2 in cat1_lower and keyword1 in cat2_lower)):
+                return True
+
+        return False
+
+    def _merge_similar_categories(self, categories: Dict[str, Any], threshold: float = None) -> Dict[str, Any]:
+        """Merge categories with high semantic similarity, preserving distinct business value."""
+        if threshold is None:
+            threshold = self.similarity_threshold
+
+        logger.info(f"Merging similar categories with threshold {threshold}")
+
+        category_names = list(categories.keys())
+        merged_categories = {}
+        processed = set()
+
+        for i, category1 in enumerate(category_names):
+            if category1 in processed:
+                continue
+
+            # Start with this category as the merge target
+            merged_name = category1
+            merged_data = categories[category1].copy()
+            similar_categories = [category1]
+
+            for j, category2 in enumerate(category_names[i+1:], i+1):
+                if category2 in processed:
+                    continue
+
+                # Check if categories have distinct business value
+                if self._has_distinct_business_value(category1, category2):
+                    logger.debug(f"Preserving distinct business value: '{category1}' vs '{category2}'")
+                    continue
+
+                # Calculate similarity between descriptions
+                desc1 = categories[category1].get('definition', '')
+                desc2 = categories[category2].get('definition', '')
+
+                similarity = self._calculate_semantic_similarity(desc1, desc2)
+                logger.debug(f"Similarity between '{category1}' and '{category2}': {similarity:.3f}")
+
+                if similarity > threshold:
+                    logger.info(f"Merging '{category2}' into '{category1}' (similarity: {similarity:.3f})")
+                    similar_categories.append(category2)
+
+                    # Merge data
+                    merged_data['clusters'].extend(categories[category2].get('clusters', []))
+                    merged_data['total_emails'] += categories[category2].get('total_emails', 0)
+
+                    # Combine indicators and rules
+                    if 'sample_indicators' in merged_data and 'sample_indicators' in categories[category2]:
+                        merged_data['sample_indicators'].extend(categories[category2]['sample_indicators'])
+                    if 'decision_rules' in merged_data and 'decision_rules' in categories[category2]:
+                        merged_data['decision_rules'].extend(categories[category2]['decision_rules'])
+
+                    processed.add(category2)
+
+            # Use the most representative name (could be improved with better logic)
+            if len(similar_categories) > 1:
+                # Choose the name with highest email count
+                best_name = max(similar_categories, key=lambda x: categories[x].get('total_emails', 0))
+                merged_name = best_name
+                merged_data = categories[best_name].copy()
+
+                # Re-merge all data into the best category
+                merged_data['clusters'] = []
+                merged_data['total_emails'] = 0
+                all_indicators = []
+                all_rules = []
+
+                for cat in similar_categories:
+                    merged_data['clusters'].extend(categories[cat].get('clusters', []))
+                    merged_data['total_emails'] += categories[cat].get('total_emails', 0)
+                    all_indicators.extend(categories[cat].get('sample_indicators', []))
+                    all_rules.extend(categories[cat].get('decision_rules', []))
+
+                # Deduplicate lists
+                merged_data['sample_indicators'] = list(set(all_indicators))
+                merged_data['decision_rules'] = list(set(all_rules))
+
+            merged_categories[merged_name] = merged_data
+            processed.add(category1)
+
+        logger.info(f"Merged {len(categories)} categories into {len(merged_categories)} categories")
+        return merged_categories
+
+    def _apply_business_consolidation_rules(self, categories: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply business-specific consolidation rules and patterns."""
+        logger.info("Applying business consolidation rules...")
+
+        # Pattern-based consolidation rules - only merge truly duplicate administrative patterns
+        consolidation_patterns = {
+            'Administrative Update': [
+                r'^administrative.*update.*and.*inquiry$',
+                r'^administrative.*update.*and.*confirmation$',
+                r'^administrative.*update.*request$',
+                r'^administrative.*communication$',
+                r'^contact.*information.*update$'
+            ]
+            # Removed broader patterns to preserve payment and invoice distinctions
+        }
+
+        # Group categories by patterns
+        pattern_groups = {}
+        unmatched_categories = {}
+
+        for category_name, category_data in categories.items():
+            matched = False
+            category_lower = category_name.lower()
+
+            for target_name, patterns in consolidation_patterns.items():
+                for pattern in patterns:
+                    if re.search(pattern, category_lower):
+                        if target_name not in pattern_groups:
+                            pattern_groups[target_name] = []
+                        pattern_groups[target_name].append((category_name, category_data))
+                        matched = True
+                        break
+                if matched:
+                    break
+
+            if not matched:
+                unmatched_categories[category_name] = category_data
+
+        # Merge pattern groups
+        consolidated_categories = {}
+
+        for target_name, group_categories in pattern_groups.items():
+            if len(group_categories) == 1:
+                # Only one category in this pattern, keep original name
+                orig_name, orig_data = group_categories[0]
+                consolidated_categories[orig_name] = orig_data
+            else:
+                # Multiple categories, merge them
+                logger.info(f"Consolidating {len(group_categories)} categories into '{target_name}'")
+
+                merged_data = {
+                    'definition': self._create_consolidated_definition(target_name, group_categories),
+                    'clusters': [],
+                    'total_emails': 0,
+                    'sample_indicators': [],
+                    'decision_rules': [],
+                    'business_relevance': self._get_business_relevance(target_name)
+                }
+
+                for category_name, category_data in group_categories:
+                    merged_data['clusters'].extend(category_data.get('clusters', []))
+                    merged_data['total_emails'] += category_data.get('total_emails', 0)
+                    merged_data['sample_indicators'].extend(category_data.get('sample_indicators', []))
+                    merged_data['decision_rules'].extend(category_data.get('decision_rules', []))
+
+                # Deduplicate lists
+                merged_data['sample_indicators'] = list(set(merged_data['sample_indicators']))[:5]  # Limit to 5
+                merged_data['decision_rules'] = list(set(merged_data['decision_rules']))[:5]  # Limit to 5
+
+                consolidated_categories[target_name] = merged_data
+
+        # Add unmatched categories
+        consolidated_categories.update(unmatched_categories)
+
+        # Ensure minimum category diversity (at least 3 categories for business value)
+        if len(consolidated_categories) < 3:
+            logger.warning(f"Only {len(consolidated_categories)} categories after consolidation. Consider lowering similarity threshold.")
+
+        return consolidated_categories
+
+    def _create_consolidated_definition(self, target_name: str, group_categories: List[Tuple[str, Dict]]) -> str:
+        """Create a consolidated definition for merged categories."""
+        definitions = {
+            'Administrative Update': 'Customer communications focused on updating contact information, confirming receipt of documents, and addressing routine administrative matters related to billing and account management.',
+            'Payment Processing': 'Customer inquiries and communications related to payment status, payment methods, and payment processing confirmation.',
+            'Invoice Management': 'Customer requests for invoice documentation, billing clarifications, and follow-up communications regarding specific invoices or charges.'
+        }
+        return definitions.get(target_name, f'Consolidated category for {target_name.lower()} related communications.')
+
+    def _get_business_relevance(self, category_name: str) -> str:
+        """Get business relevance description for consolidated categories."""
+        relevance = {
+            'Administrative Update': 'Ensures accurate customer records and smooth administrative processes, reducing billing errors and miscommunications.',
+            'Payment Processing': 'Tracks payment-related inquiries to improve payment processing and customer satisfaction.',
+            'Invoice Management': 'Facilitates proper invoice handling and reduces billing disputes through clear documentation.'
+        }
+        return relevance.get(category_name, f'Supports collections operations through effective {category_name.lower()} handling.')
 
     def consolidate_categories(self, llm_analysis: Dict[str, Any]) -> Dict[str, Any]:
         """Consolidate LLM-proposed categories using curation rules."""
@@ -267,13 +496,15 @@ class TaxonomyCurator:
     def generate_labeling_guide(self, taxonomy: Dict[str, Any]) -> str:
         """Generate comprehensive labeling guide markdown."""
 
-        guide = f"""# Email Taxonomy Labeling Guide
+        guide = f"""# Customer Email Taxonomy Labeling Guide
 
 Generated by Email Taxonomy Discovery Pipeline
 
 ## Overview
 
-This guide provides detailed instructions for classifying customer emails into intent and sentiment categories based on analysis of {taxonomy['metadata']['total_emails_analyzed']} emails with {taxonomy['metadata']['coverage_percentage']:.1f}% coverage.
+This guide provides detailed instructions for classifying INCOMING CUSTOMER emails into intent and sentiment categories. The taxonomy was derived from analysis of {taxonomy['metadata']['total_emails_analyzed']} incoming customer emails with {taxonomy['metadata']['coverage_percentage']:.1f}% coverage.
+
+**Purpose**: Categorize emails RECEIVED by collections teams FROM customers to understand customer communication patterns and improve response strategies.
 
 ## Classification Framework
 
@@ -291,17 +522,19 @@ This guide provides detailed instructions for classifying customer emails into i
         for intent_name, intent_data in taxonomy['intent_categories'].items():
             guide += f"""### {intent_name}
 
-**Definition**: {intent_data['definition']}
+**Definition**: {intent_data.get('description', intent_data.get('definition', ''))}
 
-**Coverage**: {intent_data['coverage']['total_emails']} emails across {intent_data['coverage']['clusters']} clusters
+**Coverage**: {intent_data.get('coverage', 'N/A')} of emails
 
 **Decision Rules**:
 """
-            for rule in intent_data['decision_rules']:
+            decision_rules = intent_data.get('decision_rules', [])
+            for rule in decision_rules:
                 guide += f"- {rule}\n"
 
             guide += "\n**Examples**:\n"
-            for example in intent_data['examples']:
+            examples = intent_data.get('examples', [])
+            for example in examples:
                 guide += f"- \"{example}\"\n"
 
             guide += "\n"
@@ -312,17 +545,19 @@ This guide provides detailed instructions for classifying customer emails into i
         for sentiment_name, sentiment_data in taxonomy['sentiment_categories'].items():
             guide += f"""### {sentiment_name}
 
-**Definition**: {sentiment_data['definition']}
+**Definition**: {sentiment_data.get('description', sentiment_data.get('definition', ''))}
 
-**Coverage**: {sentiment_data['coverage']['total_emails']} emails across {sentiment_data['coverage']['clusters']} clusters
+**Coverage**: {sentiment_data.get('coverage', 'N/A')} of emails
 
 **Decision Rules**:
 """
-            for rule in sentiment_data['decision_rules']:
+            decision_rules = sentiment_data.get('decision_rules', [])
+            for rule in decision_rules:
                 guide += f"- {rule}\n"
 
             guide += "\n**Examples**:\n"
-            for example in sentiment_data['examples']:
+            examples = sentiment_data.get('examples', [])
+            for example in examples:
                 guide += f"- \"{example}\"\n"
 
             guide += "\n"
@@ -354,30 +589,31 @@ This guide provides detailed instructions for classifying customer emails into i
         """Perform complete taxonomy curation from LLM analysis."""
         logger.info("Starting taxonomy curation...")
 
-        # Consolidate categories
-        consolidated_taxonomy = self.consolidate_categories(llm_analysis)
+        # Extract rich content from LLM analysis
+        rich_taxonomy = self._extract_rich_taxonomy(llm_analysis)
 
-        # Generate final taxonomy
+        # Generate final taxonomy using rich content
         analysis_summary = llm_analysis.get('analysis_summary', {})
-        final_taxonomy = self.generate_taxonomy_yaml(consolidated_taxonomy, analysis_summary)
+        final_taxonomy = self.generate_rich_taxonomy_yaml(rich_taxonomy, analysis_summary)
 
-        # Generate labeling guide
-        labeling_guide = self.generate_labeling_guide(final_taxonomy)
+        # Generate labeling guide using structured data
+        structured_taxonomy = self._create_structured_taxonomy_for_guide(rich_taxonomy, analysis_summary)
+        labeling_guide = self.generate_labeling_guide(structured_taxonomy)
 
         results = {
             'final_taxonomy': final_taxonomy,
             'labeling_guide': labeling_guide,
             'curation_stats': {
-                'original_intent_categories': len(llm_analysis.get('proposed_taxonomy', {}).get('intent_categories', {})),
-                'final_intent_categories': len(final_taxonomy['intent_categories']),
-                'original_sentiment_categories': len(llm_analysis.get('proposed_taxonomy', {}).get('sentiment_categories', {})),
-                'final_sentiment_categories': len(final_taxonomy['sentiment_categories']),
+                'original_intent_categories': len(llm_analysis.get('cluster_analyses', {})),
+                'final_intent_categories': len(rich_taxonomy['intent_categories']),
+                'original_sentiment_categories': len(set([analysis.get('proposed_sentiment', '').split('/')[0] for analysis in llm_analysis.get('cluster_analyses', {}).values()])),
+                'final_sentiment_categories': len(rich_taxonomy['sentiment_categories']),
                 'total_emails_covered': analysis_summary.get('total_emails_in_analyzed_clusters', 0),
                 'coverage_percentage': analysis_summary.get('coverage_percentage', 0)
             }
         }
 
-        logger.info(f"Curation complete: {len(final_taxonomy['intent_categories'])} intent + {len(final_taxonomy['sentiment_categories'])} sentiment categories")
+        logger.info(f"Curation complete: {len(rich_taxonomy['intent_categories'])} intent + {len(rich_taxonomy['sentiment_categories'])} sentiment categories")
 
         return results
 
@@ -386,10 +622,13 @@ This guide provides detailed instructions for classifying customer emails into i
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Save taxonomy.yaml
+        # Save taxonomy.yaml (now a formatted string)
         taxonomy_path = output_dir / 'taxonomy.yaml'
         with open(taxonomy_path, 'w', encoding='utf-8') as f:
-            yaml.dump(curation_results['final_taxonomy'], f, default_flow_style=False, allow_unicode=True)
+            if isinstance(curation_results['final_taxonomy'], str):
+                f.write(curation_results['final_taxonomy'])
+            else:
+                yaml.dump(curation_results['final_taxonomy'], f, default_flow_style=False, allow_unicode=True)
         logger.info(f"Saved taxonomy to {taxonomy_path}")
 
         # Save labeling guide
@@ -403,3 +642,406 @@ This guide provides detailed instructions for classifying customer emails into i
         with open(summary_path, 'w', encoding='utf-8') as f:
             json.dump(curation_results['curation_stats'], f, indent=2)
         logger.info(f"Saved curation summary to {summary_path}")
+
+    def _extract_rich_taxonomy(self, llm_analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract and consolidate rich taxonomy content from cluster analyses."""
+        cluster_analyses = llm_analysis.get('cluster_analyses', {})
+
+        # First pass: Extract raw categories from clusters
+        intent_categories = {}
+        sentiment_categories = {}
+
+        for cluster_id, analysis in cluster_analyses.items():
+            # Extract intent information
+            intent_name = analysis.get('proposed_intent', f'Intent_{cluster_id}')
+            if intent_name not in intent_categories:
+                intent_categories[intent_name] = {
+                    'definition': analysis.get('intent_definition', ''),
+                    'decision_rules': analysis.get('decision_rules', []),
+                    'sample_indicators': analysis.get('sample_indicators', []),
+                    'business_relevance': analysis.get('business_relevance', ''),
+                    'clusters': [],
+                    'total_emails': 0
+                }
+
+            intent_categories[intent_name]['clusters'].append(cluster_id)
+            intent_categories[intent_name]['total_emails'] += analysis.get('cluster_size', 0)
+
+            # Extract sentiment information
+            sentiment_name = analysis.get('proposed_sentiment', f'Sentiment_{cluster_id}').split('/')[0]
+            if sentiment_name not in sentiment_categories:
+                sentiment_categories[sentiment_name] = {
+                    'definition': analysis.get('sentiment_definition', ''),
+                    'clusters': [],
+                    'total_emails': 0
+                }
+
+            sentiment_categories[sentiment_name]['clusters'].append(cluster_id)
+            sentiment_categories[sentiment_name]['total_emails'] += analysis.get('cluster_size', 0)
+
+        logger.info(f"Extracted {len(intent_categories)} raw intent categories before consolidation")
+
+        # Apply consolidation steps
+        # Step 1: Semantic similarity merging (high threshold to preserve business value)
+        consolidated_intents = self._merge_similar_categories(intent_categories, threshold=0.92)
+
+        # Step 2: Business pattern consolidation
+        final_intents = self._apply_business_consolidation_rules(consolidated_intents)
+
+        logger.info(f"Final result: {len(final_intents)} consolidated intent categories")
+
+        return {
+            'intent_categories': final_intents,
+            'sentiment_categories': sentiment_categories
+        }
+
+    def _generate_realistic_examples(self, intent_name: str, indicators: List[str]) -> List[str]:
+        """Generate realistic examples based on indicators."""
+        if not indicators:
+            return []
+
+        # Create examples based on indicators
+        examples = []
+        for indicator in indicators[:3]:  # Limit to 3 examples
+            if 'update' in indicator.lower():
+                examples.append(f"Please {indicator} for our billing records")
+            elif 'request' in indicator.lower():
+                examples.append(f"I need to {indicator} regarding my account")
+            else:
+                examples.append(f"Email content containing: {indicator}")
+
+        return examples
+
+    def _get_business_value_for_sentiment(self, sentiment_name: str) -> str:
+        """Get business value description for sentiment."""
+        business_values = {
+            'Cooperative': 'Identify engaged customers likely to resolve issues quickly',
+            'Administrative': 'Standard processing - routine business communications',
+            'Informational': 'Track information gaps and communication needs',
+            'Frustrated': 'Flag for priority handling and relationship management'
+        }
+        return business_values.get(sentiment_name, 'Track customer sentiment patterns')
+
+    def _generate_sentiment_decision_rules(self, sentiment_name: str) -> List[str]:
+        """Generate decision rules for sentiment categories."""
+        rules = {
+            'Cooperative': [
+                'Customer offers to provide additional information',
+                'Customer confirms payment actions or timeline',
+                'Customer apologizes for delays or issues',
+                'Customer actively works toward resolution'
+            ],
+            'Administrative': [
+                'Email reports system or processing issues',
+                'Email requests cancellations or corrections due to errors',
+                'Email provides administrative status updates',
+                'Email mentions processing delays or technical problems'
+            ],
+            'Informational': [
+                'Email confirms successful payment completion',
+                'Email provides routine business updates or quotes',
+                'Email requests feedback or procedural information',
+                'Email is not directly collection-related'
+            ],
+            'Frustrated': [
+                'Customer expresses dissatisfaction or frustration',
+                'Customer uses urgent or demanding language',
+                'Customer mentions escalation or complaints'
+            ]
+        }
+        return rules.get(sentiment_name, [])
+
+    def _generate_sentiment_indicators(self, sentiment_name: str) -> List[str]:
+        """Generate key indicators for sentiment categories."""
+        indicators = {
+            'Cooperative': [
+                'happy to provide',
+                'apologies for the delays',
+                'trying to resolve this',
+                'let me know if you need',
+                'payment has been initiated'
+            ],
+            'Administrative': [
+                'cancel the invoice',
+                'awaiting payment',
+                'processed and currently awaiting',
+                'unexpected error',
+                'system issue'
+            ],
+            'Informational': [
+                'invoice has been paid',
+                'please submit through',
+                'draft quote attached',
+                'opinion matters',
+                'feedback request'
+            ],
+            'Frustrated': [
+                'unacceptable delay',
+                'need immediate resolution',
+                'escalating this issue',
+                'extremely disappointed'
+            ]
+        }
+        return indicators.get(sentiment_name, [])
+
+    def _generate_sentiment_examples(self, sentiment_name: str) -> List[str]:
+        """Generate examples for sentiment categories."""
+        examples = {
+            'Cooperative': [
+                'Apologies for the delay, payment will be processed tomorrow',
+                'Happy to provide the W9 form you requested',
+                'Let me loop in our AP team to resolve this quickly'
+            ],
+            'Administrative': [
+                'Please cancel invoice #INV123 due to system error',
+                'Invoice processed and currently awaiting final approval',
+                'Unexpected error occurred during payment processing'
+            ],
+            'Informational': [
+                'Your invoice has been paid via check #12345',
+                'Please submit future invoices through our portal',
+                'Please find attached draft quote as requested'
+            ],
+            'Frustrated': [
+                'This is the third time I have requested this information',
+                'Need immediate resolution - this delay is unacceptable'
+            ]
+        }
+        return examples.get(sentiment_name, [])
+
+    def generate_rich_taxonomy_yaml(self, rich_taxonomy: Dict[str, Any], analysis_summary: Dict[str, Any]) -> str:
+        """Generate clean, well-formatted taxonomy YAML matching reference structure."""
+        intent_categories = rich_taxonomy['intent_categories']
+        sentiment_categories = rich_taxonomy['sentiment_categories']
+
+        # Generate the YAML content as a formatted string
+        yaml_content = self._generate_formatted_yaml(
+            intent_categories,
+            sentiment_categories,
+            analysis_summary
+        )
+
+        return yaml_content
+
+    def _generate_formatted_yaml(self, intent_categories: Dict[str, Any], sentiment_categories: Dict[str, Any], analysis_summary: Dict[str, Any]) -> str:
+        """Generate clean, formatted YAML string matching reference taxonomy structure."""
+
+        total_emails = analysis_summary.get('total_emails_in_analyzed_clusters', 0)
+        clusters_analyzed = analysis_summary.get('clusters_analyzed', 0)
+        coverage_pct = analysis_summary.get('coverage_percentage', 0)
+
+        # Start with header and metadata
+        yaml_lines = [
+            "# Collection Notes AI - Sentiment and Intent Taxonomy",
+            f"# Derived from clustering analysis of {total_emails} real collection emails",
+            "# Production-ready categories for NetSuite Collection Notes automation",
+            "",
+            'version: "1.0"',
+            'generated_date: "2024-09-19"',
+            f'source_emails: {total_emails}',
+            f'clusters_analyzed: {clusters_analyzed}',
+            f'coverage: "{coverage_pct:.1f}%"  # {total_emails} emails from top {clusters_analyzed} clusters',
+            ""
+        ]
+
+        # Add intent categories section
+        yaml_lines.extend([
+            "# INTENT CATEGORIES",
+            f"# Consolidated from {clusters_analyzed} clusters into {len(intent_categories)} actionable categories",
+            "intent_categories:",
+            ""
+        ])
+
+        # Add each intent category
+        for intent_name, intent_data in intent_categories.items():
+            snake_case_name = self._to_snake_case(intent_name)
+            coverage_pct = (intent_data['total_emails'] / total_emails) * 100
+
+            yaml_lines.extend([
+                f"  {snake_case_name}:",
+                f'    display_name: "{intent_name}"',
+                f'    description: "{intent_data["definition"]}"',
+                f'    business_value: "{intent_data.get("business_relevance", "Track customer engagement patterns")}"',
+                f'    coverage: "{coverage_pct:.1f}%"  # {intent_data["total_emails"]} emails',
+                "    decision_rules:"
+            ])
+
+            for rule in intent_data.get('decision_rules', []):
+                yaml_lines.append(f'      - "{rule}"')
+
+            yaml_lines.append("    key_indicators:")
+            for indicator in intent_data.get('sample_indicators', []):
+                yaml_lines.append(f'      - "{indicator}"')
+
+            yaml_lines.append("    examples:")
+            examples = self._generate_clean_examples(intent_name, intent_data.get('sample_indicators', []))
+            for example in examples:
+                yaml_lines.append(f'      - "{example}"')
+
+            yaml_lines.append("")
+
+        # Add sentiment categories section
+        yaml_lines.extend([
+            "# SENTIMENT CATEGORIES",
+            f"# Consolidated from {len(sentiment_categories)} categories into distinct sentiment levels",
+            "sentiment_categories:",
+            ""
+        ])
+
+        # Add each sentiment category
+        for sentiment_name, sentiment_data in sentiment_categories.items():
+            snake_case_name = self._to_snake_case(sentiment_name)
+            coverage_pct = (sentiment_data['total_emails'] / total_emails) * 100
+
+            yaml_lines.extend([
+                f"  {snake_case_name}:",
+                f'    display_name: "{sentiment_name}"',
+                f'    description: "{sentiment_data["definition"]}"',
+                f'    business_value: "{self._get_business_value_for_sentiment(sentiment_name)}"',
+                f'    coverage: "{coverage_pct:.1f}%"  # {sentiment_data["total_emails"]} emails',
+                "    decision_rules:"
+            ])
+
+            for rule in self._generate_sentiment_decision_rules(sentiment_name):
+                yaml_lines.append(f'      - "{rule}"')
+
+            yaml_lines.append("    key_indicators:")
+            for indicator in self._generate_sentiment_indicators(sentiment_name):
+                yaml_lines.append(f'      - "{indicator}"')
+
+            yaml_lines.append("    examples:")
+            for example in self._generate_sentiment_examples(sentiment_name):
+                yaml_lines.append(f'      - "{example}"')
+
+            yaml_lines.append("")
+
+        # Add modifier flags section
+        yaml_lines.extend([
+            "# MODIFIER FLAGS",
+            "# Additional flags for special handling",
+            "modifier_flags:",
+            "",
+            "  urgency:",
+            '    description: "Communication indicates time-sensitive matter"',
+            '    indicators: ["urgent", "asap", "immediately", "deadline", "overdue"]',
+            "",
+            "  escalation:",
+            '    description: "Customer mentions involving management or external parties"',
+            '    indicators: ["manager", "supervisor", "escalate", "complaint", "legal"]',
+            "",
+            "  payment_commitment:",
+            '    description: "Customer makes specific payment promise or timeline"',
+            '    indicators: ["will pay", "payment scheduled", "check sent", "processing payment"]',
+            ""
+        ])
+
+        # Add validation rules section
+        yaml_lines.extend([
+            "# VALIDATION RULES",
+            "validation_rules:",
+            "  mutual_exclusivity:",
+            '    - "Each email must have exactly one intent category"',
+            '    - "Each email must have exactly one sentiment category"',
+            '    - "Modifier flags are optional and non-exclusive"',
+            "",
+            "  confidence_thresholds:",
+            '    high_confidence: "Clear indicators present, unambiguous categorization"',
+            '    medium_confidence: "Some indicators present, minor ambiguity"',
+            '    low_confidence: "Weak indicators, significant ambiguity - flag for human review"',
+            ""
+        ])
+
+        # Add NetSuite integration section
+        yaml_lines.extend([
+            "# BUSINESS MAPPING",
+            "netsuite_integration:",
+            "  collection_note_fields:",
+            '    sentiment: "Maps to Collection Note Sentiment picklist"',
+            '    intent: "Maps to Collection Note Category field"',
+            '    modifiers: "Maps to Collection Note Priority/Flags fields"',
+            "",
+            "  automation_triggers:",
+            '    cooperative_payment_inquiry: "Auto-acknowledge receipt, provide status update"',
+            '    invoice_management: "Route to billing team, auto-request documentation"',
+            '    frustrated: "Priority queue, assign to senior collector"'
+        ])
+
+        return "\n".join(yaml_lines)
+
+    def _to_snake_case(self, text: str) -> str:
+        """Convert text to snake_case."""
+        import re
+        # Replace spaces and special chars with underscores, then lowercase
+        snake = re.sub(r'[^a-zA-Z0-9]+', '_', text.strip())
+        snake = re.sub(r'_+', '_', snake)  # Replace multiple underscores with single
+        return snake.strip('_').lower()
+
+    def _generate_clean_examples(self, intent_name: str, indicators: List[str]) -> List[str]:
+        """Generate clean, realistic examples for intent categories."""
+        if not indicators:
+            return [
+                f"Customer email requesting {intent_name.lower()}",
+                f"Communication regarding {intent_name.lower()}",
+                f"Email about {intent_name.lower()}"
+            ]
+
+        examples = []
+        for i, indicator in enumerate(indicators[:3]):  # Limit to 3 examples
+            if 'update' in indicator.lower():
+                examples.append(f"Can you {indicator.lower()} for my account?")
+            elif 'request' in indicator.lower():
+                examples.append(f"I need to {indicator.lower()} regarding this matter")
+            elif 'payment' in indicator.lower():
+                examples.append(f"Regarding {indicator.lower()}, please advise")
+            else:
+                examples.append(f"Email mentions: {indicator}")
+
+        return examples[:3] if examples else [
+            f"Customer inquiry about {intent_name.lower()}",
+            f"Request for {intent_name.lower()}",
+            f"Communication regarding {intent_name.lower()}"
+        ]
+
+    def _create_structured_taxonomy_for_guide(self, rich_taxonomy: Dict[str, Any], analysis_summary: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a structured taxonomy dict for labeling guide generation."""
+        intent_categories = rich_taxonomy['intent_categories']
+        sentiment_categories = rich_taxonomy['sentiment_categories']
+        total_emails = analysis_summary.get('total_emails_in_analyzed_clusters', 0)
+
+        structured = {
+            'metadata': {
+                'total_emails_analyzed': total_emails,
+                'coverage_percentage': analysis_summary.get('coverage_percentage', 0)
+            },
+            'classification_rules': {
+                'intent_priority': list(intent_categories.keys()),
+                'sentiment_priority': list(sentiment_categories.keys()),
+                'decision_framework': 'Apply intent first, then determine sentiment within that intent context'
+            },
+            'intent_categories': {},
+            'sentiment_categories': {}
+        }
+
+        # Add intent categories
+        for intent_name, intent_data in intent_categories.items():
+            coverage_pct = f"{(intent_data['total_emails'] / total_emails) * 100:.1f}%"
+
+            structured['intent_categories'][intent_name] = {
+                'description': intent_data['definition'],
+                'coverage': coverage_pct,
+                'decision_rules': intent_data.get('decision_rules', []),
+                'examples': self._generate_clean_examples(intent_name, intent_data.get('sample_indicators', []))
+            }
+
+        # Add sentiment categories
+        for sentiment_name, sentiment_data in sentiment_categories.items():
+            coverage_pct = f"{(sentiment_data['total_emails'] / total_emails) * 100:.1f}%"
+
+            structured['sentiment_categories'][sentiment_name] = {
+                'description': sentiment_data['definition'],
+                'coverage': coverage_pct,
+                'decision_rules': self._generate_sentiment_decision_rules(sentiment_name),
+                'examples': self._generate_sentiment_examples(sentiment_name)
+            }
+
+        return structured

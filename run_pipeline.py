@@ -60,13 +60,18 @@ def run_pipeline_from_config(config_path: str, steps: str = None) -> None:
     print(f"Output directory: {Path(config.output_dir) / config.dataset_name}")
 
 
-def run_pipeline_quick(input_file: str, dataset_name: str) -> None:
+def run_pipeline_quick(input_file: str, dataset_name: str = None) -> None:
     """Run the pipeline with minimal configuration."""
     if not Path(input_file).exists():
         print(f"Error: Input file {input_file} not found.")
         sys.exit(1)
 
-    config = ConfigManager.create_default_config(dataset_name, input_file)
+    # Use auto-numbering if no dataset name provided
+    auto_number = dataset_name is None
+    if dataset_name is None:
+        dataset_name = "temp"  # Will be replaced by auto-numbering
+
+    config = ConfigManager.create_default_config(dataset_name, input_file, auto_number=auto_number)
     pipeline = TaxonomyPipeline(config)
 
     results = pipeline.run_full_pipeline()
@@ -119,7 +124,7 @@ Examples:
     parser.add_argument(
         '--dataset-name',
         type=str,
-        help='Name for the dataset (required with --input)'
+        help='Name for the dataset (optional - will auto-generate output_analysis_# if not provided)'
     )
 
     parser.add_argument(
@@ -142,9 +147,6 @@ Examples:
     elif args.config:
         run_pipeline_from_config(args.config, args.steps)
     elif args.input:
-        if not args.dataset_name:
-            print("Error: --dataset-name is required when using --input")
-            sys.exit(1)
         run_pipeline_quick(args.input, args.dataset_name)
 
 

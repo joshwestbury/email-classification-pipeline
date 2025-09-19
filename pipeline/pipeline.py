@@ -198,13 +198,26 @@ class TaxonomyPipeline:
 
     def _generate_summary(self) -> Dict[str, Any]:
         """Generate a summary of the pipeline run."""
+
+        # Get email counts from processed data
+        processed_data = self.state.get('processed_data', {})
+        all_emails = processed_data.get('emails', [])
+        total_emails = len(all_emails)
+
+        # Count incoming vs outgoing emails after classification
+        incoming_emails = [e for e in all_emails if e.get('direction') == 'incoming']
+        outgoing_emails = [e for e in all_emails if e.get('direction') == 'outgoing']
+
         summary = {
             'dataset': self.config.dataset_name,
             'config': self.config.__dict__,
             'results': {
-                'total_emails': len(self.state.get('processed_data', {}).get('emails', [])),
+                'total_emails': total_emails,
+                'incoming_emails': len(incoming_emails),
+                'outgoing_emails': len(outgoing_emails),
+                'classification_ratio': f"{len(incoming_emails)}/{len(outgoing_emails)}" if outgoing_emails else f"{len(incoming_emails)}/0",
                 'clusters_found': len(self.state.get('clusters', {}).get('cluster_stats', {})),
-                'categories_proposed': len(self.state.get('taxonomy', {}).get('categories', {}))
+                'categories_proposed': self.state.get('taxonomy', {}).get('curation_stats', {}).get('final_intent_categories', 0)
             },
             'output_files': [
                 str(self.config.get_output_path(f)) for f in [
