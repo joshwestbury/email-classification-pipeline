@@ -1,0 +1,36 @@
+# Email Taxonomy Discovery Pipeline Configuration Template
+#
+# Copy this file and modify the values for your specific dataset
+
+# Dataset identification
+dataset_name: "example_dataset"  # Unique name for your dataset
+input_file: "path/to/your/emails.json"  # Path to your input email JSON file
+
+# Processing options
+clean_html: true          # Remove HTML tags from email content
+anonymize_pii: true       # Anonymize personally identifiable information
+separate_threads: true    # Separate threaded email conversations
+
+# Embedding configuration
+embedding_model: "all-MiniLM-L6-v2"  # Sentence transformer model name
+include_thread_context: true         # Generate thread-level embeddings
+
+# Clustering parameters (experiment with these for different results)
+umap_n_neighbors: 15       # UMAP neighbors parameter (5-50)
+umap_min_dist: 0.1         # UMAP minimum distance (0.0-0.99)
+umap_n_components: 50      # UMAP output dimensions (10-100)
+hdbscan_min_cluster_size: 5    # Minimum emails per cluster (3-20)
+hdbscan_min_samples: 3     # HDBSCAN minimum samples (1-10)
+
+# LLM analysis settings
+openai_model: "gpt-4o"     # OpenAI model for cluster analysis
+analyze_top_clusters: 8    # Number of top clusters to analyze in detail
+
+# Output settings
+output_dir: "outputs"      # Base directory for outputs
+save_intermediate: true    # Save intermediate results for debugging
+
+# Notes:
+# - Make sure to set OPENAI_API_KEY environment variable
+# - Input file should be in the same format as CollectionNotes_SentimentAnalysis_SampleEmails.json
+# - Adjust clustering parameters based on your dataset size and diversity
