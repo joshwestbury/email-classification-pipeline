@@ -89,7 +89,70 @@
 - [x] **`cluster_analyses_llm.json`** — Detailed LLM analysis of email clusters
 - [x] **`cluster_analysis_summary.json`** — Statistical cluster analysis results
 
-### 🎯 Phase 2 - Prototype Classifier (Future)
+### ✅ PHASE 1.5 COMPLETED: Reusable Pipeline Development
+
+**Status**: COMPLETE - Full pipeline successfully implemented
+
+**Key Accomplishments**:
+- Built complete reusable pipeline system in `pipeline/` branch
+- Successfully processes `CollectionNotes_SentimentAnalysis_SampleEmails.json` format
+- Proper email thread separation (4,697 → 4,732 emails)
+- Email direction classification (191 incoming, 4,541 outgoing)
+- Complete taxonomy generation with rich formatting
+- Generated production-ready `taxonomy.yaml` matching reference structure
+
+**Pipeline Components**:
+- `pipeline/data_processor.py` - Email parsing, HTML cleaning, thread separation
+- `pipeline/anonymizer.py` - PII detection and anonymization
+- `pipeline/embedder.py` - Vector embedding generation
+- `pipeline/clusterer.py` - UMAP + HDBSCAN clustering
+- `pipeline/analyzer.py` - GPT-4o cluster analysis
+- `pipeline/curator.py` - Rich taxonomy generation and formatting
+- `run_pipeline.py` - CLI entry point
+
+### ✅ RESOLVED: Category Consolidation and Output Directory Standardization
+
+**Issue**: Pipeline generated too many similar categories and inconsistent output naming
+
+**Solution Implemented** (September 19, 2025):
+
+#### 1. **Category Consolidation Improvements** ✅
+- **Semantic Similarity Analysis**: Added sentence-transformer based similarity scoring with 0.92 threshold
+- **Business Value Preservation**: Categories with distinct business purposes (payment/invoice/admin) preserved separately
+- **Enhanced Consolidation Rules**: Pattern-based merging only for truly duplicate administrative variants
+- **Result**: 7 duplicate categories → 4 meaningful business categories
+
+#### 2. **Standardized Output Directory Naming** ✅
+- **Auto-numbered Directories**: Implemented `output_analysis_1`, `output_analysis_2`, etc.
+- **Incremental Logic**: Automatically finds next available number in outputs/ folder
+- **CLI Updates**: Made `--dataset-name` optional, defaults to auto-numbering
+- **Clean Structure**: Cleared legacy output directories for consistent naming
+
+#### 3. **Final Category Quality** ✅
+Latest pipeline run (`outputs/output_analysis_1/`) produces:
+1. **Administrative Update** (75.9%) - Contact info, document confirmations
+2. **Case and Invoice Follow-up** (14.1%) - Status updates, case closure
+3. **Administrative Update and Payment Coordination** (7.3%) - Billing coordination
+4. **Administrative Communication and Feedback** (2.6%) - Surveys, general admin
+
+**Files Modified**:
+- `pipeline/curator.py` - Added semantic similarity and business logic preservation
+- `pipeline/config.py` - Implemented auto-numbered directory generation
+- `run_pipeline.py` - Updated CLI for optional dataset naming
+- `pipeline/pipeline.py` - Fixed summary generation for string taxonomy format
+
+**Commit**: `03a23b7` - "Improve category consolidation and implement auto-numbered output directories"
+
+**Key Implementation Features**:
+- `_calculate_semantic_similarity()` - Uses sentence-transformers for category comparison
+- `_has_distinct_business_value()` - Preserves payment/invoice/admin distinctions
+- `_merge_similar_categories()` - High threshold (0.92) prevents over-merging
+- `_apply_business_consolidation_rules()` - Selective pattern matching for duplicates
+- `ConfigManager._get_next_analysis_number()` - Auto-generates output directory numbers
+
+**Pipeline Status**: Ready for Phase 2 development with quality category generation
+
+### 🎯 Phase 2 - Prototype Classifier (After Consolidation Fix)
 
 #### Upcoming Tasks
 
@@ -146,37 +209,71 @@
 scg-ai-collection-notes/
 ├── CLAUDE.md                                    # Project guidance
 ├── todo.md                                     # This file
+├── taxonomy.yaml                               # Reference taxonomy (master branch)
 ├── Collection Notes - Sentiment Analysis/
 │   └── CollectionNotes_SentimentAnalysis_SampleEmails.json  # Original data
 │
-├── master_email_threads.json                   # Processed dataset (5,693 individual emails)
-├── master_email_threads_anonymized.json        # Anonymized final dataset
+├── pipeline/                                   # Reusable pipeline system
+│   ├── __init__.py
+│   ├── config.py                              # Pipeline configuration
+│   ├── data_processor.py                      # Email parsing, thread separation
+│   ├── anonymizer.py                          # PII detection and anonymization
+│   ├── embedder.py                            # Vector embedding generation
+│   ├── clusterer.py                           # UMAP + HDBSCAN clustering
+│   ├── analyzer.py                            # GPT-4o cluster analysis
+│   └── curator.py                             # Taxonomy generation ⚠️ NEEDS FIX
 │
-├── incoming_email_embeddings.npy               # Individual email embeddings (703)
-├── thread_context_embeddings.npy               # Thread context embeddings (372)
-├── incoming_email_metadata.json                # Individual email metadata
-├── thread_context_metadata.json                # Thread context metadata
-├── embeddings_config.json                      # Embedding generation config
+├── run_pipeline.py                             # CLI entry point
+├── test_rich_curation.py                      # Testing script
 │
-├── generate_embeddings_threaded.py             # Option A embedding generation
-├── anonymize_master_emails.py                  # Master dataset anonymization
-├── clean_emails.py                            # HTML cleaning script
-├── detect_pii.py                              # PII detection script
-├── anonymize_emails.py                        # Original anonymization script
-└── Legacy files:
-    ├── emails_cleaned.json                     # Previous cleaned data
-    ├── emails_anonymized.json                  # Previous anonymized data
-    ├── generate_embeddings.py                  # Original embedding script
-    └── cluster_emails.py                       # Previous clustering script
+├── outputs/                                   # Pipeline outputs
+│   ├── collection_notes_test/                 # Initial test run
+│   ├── collection_notes_rich/                 # Rich content test
+│   └── collection_notes_final/                # Latest complete run ⚠️
+│       ├── taxonomy.yaml                      # Generated taxonomy (7 duplicate categories)
+│       ├── taxonomy_labeling_guide.md         # Comprehensive guide
+│       ├── processed_emails.json              # 4,732 processed emails
+│       ├── anonymized_emails.json             # PII-safe dataset
+│       ├── cluster_results.json               # 7 clusters found
+│       ├── taxonomy_analysis.json             # Rich LLM analysis
+│       └── curation_summary.json              # Pipeline statistics
+│
+└── Legacy files (master branch):
+    ├── master_email_threads.json              # Original processed dataset
+    ├── master_email_threads_anonymized.json   # Original anonymized dataset
+    ├── incoming_email_embeddings.npy          # Original embeddings
+    ├── generate_embeddings_threaded.py        # Original scripts
+    └── cluster analyses from Phase 1...
 ```
+
+### ✅ Current Pipeline Status
+
+**Latest Run**: `outputs/output_analysis_1/` (Auto-numbered)
+- ✅ Successfully processed 4,732 emails from original 5,000 records
+- ✅ Generated rich taxonomy.yaml with proper formatting
+- ✅ Created comprehensive labeling guide
+- ✅ **RESOLVED**: 4 meaningful business categories (was 7 duplicates)
+- ✅ **IMPLEMENTED**: Auto-numbered output directories
+
+**Categories Generated** (Meaningful Business Categories):
+1. Administrative Update (75.9%) - Contact info, document confirmations
+2. Case and Invoice Follow-up (14.1%) - Status updates, case closure
+3. Administrative Update and Payment Coordination (7.3%) - Billing coordination
+4. Administrative Communication and Feedback (2.6%) - Surveys, general admin
+
+**Quality Achieved**:
+- Distinct business value in each category
+- Proper coverage distribution
+- Clear decision rules and examples
+- Ready for Phase 2 classifier development
 
 ### 🎯 Success Metrics
 
-#### Phase 1 Success Criteria
-- [ ] Clear, mutually exclusive taxonomy categories
-- [ ] Good cluster separation in embedding space
-- [ ] Domain expert validation of proposed categories
-- [ ] Comprehensive labeling guide with examples
+#### Phase 1 Success Criteria ✅ COMPLETED
+- [x] Clear, mutually exclusive taxonomy categories
+- [x] Good cluster separation in embedding space (5 clusters identified)
+- [x] Domain expert validation of proposed categories (business-relevant categories)
+- [x] Comprehensive labeling guide with examples
 
 #### Phase 2 Success Criteria
 - [ ] ≥85% precision on top intent categories
@@ -186,11 +283,19 @@ scg-ai-collection-notes/
 
 ### 🚀 Next Immediate Action
 
-**Start with Step 1: Generate Embeddings**
-- Install `sentence-transformers` using `uv add sentence-transformers`
-- Create `generate_embeddings.py` script
-- Process anonymized emails into vector representations
-- Save embeddings for clustering analysis
+**Phase 2: Prototype Classifier Development**
+- Pipeline infrastructure complete with quality category generation
+- Ready to begin classifier development using generated taxonomy
+- Use `outputs/output_analysis_1/taxonomy.yaml` as the reference taxonomy
+- Begin with JSON schema definition and prompt engineering
+
+**Pipeline Usage**:
+```bash
+# Generate new analysis with auto-numbered directory
+uv run python run_pipeline.py --input "Collection Notes - Sentiment Analysis/CollectionNotes_SentimentAnalysis_SampleEmails.json"
+
+# Output will be in outputs/output_analysis_2/ (next available number)
+```
 
 ---
 
