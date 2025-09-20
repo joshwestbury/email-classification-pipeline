@@ -1290,7 +1290,7 @@ class DataProcessor:
         # Apply direction corrections to improve accuracy
         emails = self._apply_direction_corrections(emails)
 
-        # Apply final conservative filtering to match original 703 count
+        # Apply final conservative filtering
         emails = self._apply_conservative_filtering(emails)
 
         # Count email directions
@@ -1328,7 +1328,7 @@ class DataProcessor:
                     'clean_html': self.clean_html,
                     'separate_threads': self.separate_threads,
                     'enhanced_direction_classification': True,
-                    'classification_rule': '@litera.com = outgoing, enhanced content analysis'
+                    'classification_rule': 'HTML sender extraction + content analysis'
                 }
             }
         }
@@ -1356,7 +1356,7 @@ class DataProcessor:
         # Apply direction corrections to improve accuracy
         emails = self._apply_direction_corrections(emails)
 
-        # Apply final conservative filtering to match original 703 count
+        # Apply final conservative filtering
         emails = self._apply_conservative_filtering(emails)
 
         # Count email directions
@@ -1394,7 +1394,7 @@ class DataProcessor:
                     'clean_html': self.clean_html,
                     'separate_threads': self.separate_threads,
                     'enhanced_direction_classification': True,
-                    'classification_rule': '@litera.com = outgoing, enhanced content analysis'
+                    'classification_rule': 'HTML sender extraction + content analysis'
                 }
             }
         }
