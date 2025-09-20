@@ -1,6 +1,6 @@
 # Collection Notes AI Analysis - Project TODO
 
-## Project Status: Phase 1 - Taxonomy Discovery (In Progress)
+## Project Status: Phase 2 - Pipeline Improvements (In Progress)
 
 ### ✅ Completed Tasks
 
@@ -154,11 +154,13 @@ Latest pipeline run (`outputs/output_analysis_1/`) produces:
 
 ### 🔄 CURRENT FOCUS: Phase 2 Pipeline Improvements (PRIORITY)
 
-**Issue Identified**: Current pipeline has accuracy limitations that need addressing before classifier development:
+**Issues Identified**: Current pipeline has accuracy limitations that need addressing before classifier development:
 - Only 191 incoming emails from 4,732 total (4% rate seems too low)
 - Limited sentiment diversity (only "Administrative" captured)
 - Categories too narrow and administrative-focused
 - Missing key collection-specific intents (payment disputes, hardship, etc.)
+
+**ChatGPT Expert Recommendations Incorporated**: Based on analysis of current pipeline vs. production best practices, prioritized improvements needed for production readiness.
 
 #### Phase 2.1: Email Direction Classification Enhancement ⚡ **IMMEDIATE PRIORITY**
 
@@ -268,31 +270,57 @@ Latest pipeline run (`outputs/output_analysis_1/`) produces:
     - [ ] Test different clustering parameters and prompt variations
     - [ ] Document performance improvements quantitatively
 
-#### Implementation Priority Order
+#### Implementation Priority Order (Based on ChatGPT Expert Analysis)
 
-**Week 1**: Phase 2.1 (Email Direction Classification)
-- Fix the core issue of missing customer emails
-- This will immediately improve data quality for downstream analysis
+**IMMEDIATE (High Priority)**:
+1. **PII Anonymization Security** 🔒
+   - [ ] Implement deterministic salted SHA256 hashing (replace MD5 in `anonymizer.py`)
+   - [ ] Add IBAN/credit card/postal address patterns
+   - [ ] Implement confidence-based tiering for PII detection
 
-**Week 2**: Phase 2.2 (Clustering and Sentiment)
-- Enhanced clustering for better category discovery
-- Multi-sentiment detection beyond just "Administrative"
+2. **JSON Schema Validation** 📋
+   - [ ] Add strict JSON schema validation to `analyzer.py` LLM responses
+   - [ ] Implement pydantic models for structured output validation
+   - [ ] Add retry logic with exponential backoff for failed validations
 
-**Week 3**: Phase 2.3 (LLM Enhancement)
-- Improved prompts and business logic integration
-- Context-aware analysis for better categorization
+**Week 1**: Enhanced Data Processing & Classification
+- Fix the core issue of missing customer emails (Phase 2.1)
+- Implement near-duplicate detection using cosine similarity
+- Enhanced thread context handling with bounded context
 
-**Week 4**: Phase 2.4 (Quality and Validation)
-- Automated quality assessment and validation framework
-- Performance measurement and optimization
+**Week 2**: Embedding & Clustering Improvements
+- Evaluate `all-mpnet-base-v2` model for richer semantics (Phase 2.2)
+- Implement batching and device optimization for embeddings
+- Add c-TF-IDF keyword extraction for LLM hints
 
-### 🎯 Phase 2 Success Criteria (Updated)
+**Week 3**: LLM Analysis & Production Features
+- Structured output with strict JSON schema enforcement (Phase 2.3)
+- Implement caching and rate limiting for API calls
+- Enhanced prompting with few-shot examples and working taxonomy
 
-- [ ] **Data Quality**: Increase incoming email detection to 300-500 emails (vs current 191)
+**Week 4**: Quality & Production Readiness
+- Automated quality assessment framework (Phase 2.4)
+- Create 150-250 labeled validation dataset
+- Baseline comparisons (heuristic rules vs LLM performance)
+
+### 🎯 Phase 2 Success Criteria (Updated with Expert Recommendations)
+
+**Data Quality & Coverage**:
+- [ ] **Email Detection**: Increase incoming email detection to 300-500 emails (vs current 191)
 - [ ] **Sentiment Diversity**: Capture 4-6 distinct sentiment categories (vs current 1)
 - [ ] **Intent Granularity**: Generate 6-8 actionable intent categories with business relevance
+
+**Production Readiness** (ChatGPT Priority):
+- [ ] **Security**: Salted SHA256 PII hashing with persistent salt management
+- [ ] **Validation**: Strict JSON schema enforcement with >95% parse success rate
+- [ ] **Performance**: Embedding batching with <30s processing time for 1000 emails
+- [ ] **Reliability**: LLM retry logic with exponential backoff and caching
+
+**Business Value**:
 - [ ] **Classification Accuracy**: Achieve >85% precision on validation set
-- [ ] **Business Utility**: Clear action items for collection teams for each category
+- [ ] **Coverage**: >80% of emails assigned to curated categories (vs noise)
+- [ ] **Actionability**: Clear decision rules and next steps for each category
+- [ ] **Reproducibility**: Consistent results across multiple pipeline runs
 
 ### 🎯 Phase 3 - Prototype Classifier (After Pipeline Improvements)
 
@@ -337,7 +365,14 @@ Latest pipeline run (`outputs/output_analysis_1/`) produces:
 - [x] `numpy`, `tqdm` - Supporting libraries
 - [x] `openai` or local LLM setup - For category generation
 - [x] `python-dotenv` - For environment variable management
-- [ ] `pydantic` - For JSON schema validation
+
+**New Requirements (ChatGPT Recommendations)**:
+- [ ] `pydantic` - For JSON schema validation and structured outputs
+- [ ] `pydantic-settings` - For type-safe config management
+- [ ] `scikit-learn` - For c-TF-IDF, cosine similarity, baseline models
+- [ ] `retry` or `tenacity` - For robust retry logic with exponential backoff
+- [ ] `jsonschema` - For strict JSON schema validation
+- [ ] `cryptography` - For secure salted hashing implementation
 
 #### Infrastructure Considerations
 - [x] Determine if local or cloud-based LLM processing (OpenAI GPT-4o selected)
@@ -423,14 +458,30 @@ scg-ai-collection-notes/
 - [ ] Production-ready prompt and schema
 - [ ] Validated approach for NetSuite integration
 
-### 🚀 Next Immediate Action
+### 🚀 Next Immediate Actions (Updated Priority)
 
-**PRIORITY: Phase 2.1 Email Direction Classification Enhancement**
+**PRIORITY 1: Security & Production Readiness (ChatGPT Critical Items)**
+
+1. **PII Security Enhancement** (Day 1-2) 🔒
+   ```bash
+   # Implement salted SHA256 hashing in anonymizer.py
+   # Replace MD5 with cryptographically secure approach
+   # Add persistent salt management for consistency
+   ```
+
+2. **JSON Schema Validation** (Day 2-3) 📋
+   ```bash
+   # Add pydantic models to analyzer.py
+   # Implement strict schema validation for LLM responses
+   # Add retry logic for failed validations
+   ```
+
+**PRIORITY 2: Email Direction Classification Enhancement**
 
 **Current Issue**: Only 191 incoming emails detected from 4,732 total (4% rate) - likely missing many genuine customer communications.
 
-**Immediate Tasks**:
-1. **Diagnostic Analysis** (Day 1-2):
+**Tasks** (Day 3-5):
+1. **Diagnostic Analysis**:
    ```bash
    # Sample and manually review emails marked as outgoing
    uv run python -c "
@@ -443,17 +494,18 @@ scg-ai-collection-notes/
    "
    ```
 
-2. **Enhanced Pattern Implementation** (Day 3-5):
+2. **Enhanced Pattern Implementation**:
    - Modify `pipeline/data_processor.py` `_classify_with_confidence()` method
    - Add collection-specific incoming patterns
-   - Test on current dataset and measure improvement
+   - Implement near-duplicate detection with cosine similarity
 
-3. **Validation and Testing** (Day 6-7):
+3. **Validation and Testing**:
    - Create validation set of 100 manually labeled emails
    - Test enhanced classification accuracy
    - Target: 300-500 incoming emails (2-3x improvement)
 
 **Expected Outcome**:
+- Production-ready security for sensitive data
 - Significantly more comprehensive customer email dataset
 - Better foundation for downstream clustering and taxonomy generation
 
@@ -465,6 +517,35 @@ uv run python run_pipeline.py --input "Collection Notes - Sentiment Analysis/lit
 # Output will be in outputs/output_analysis_2/ with improved email detection
 ```
 
+### 📊 Expert Recommendations Implementation Tracker
+
+**High Priority (Immediate Implementation)**:
+- [ ] **PII Security**: Salted SHA256 hashing with persistent salt (`anonymizer.py`)
+- [ ] **JSON Validation**: Strict schema enforcement with pydantic models (`analyzer.py`)
+- [ ] **Near-duplicate Detection**: Cosine similarity with 0.95 threshold (`data_processor.py`)
+- [ ] **Enhanced Thread Context**: Bounded context (1-2 previous messages) (`embedder.py`)
+
+**Medium Priority (Phase 2 Development)**:
+- [ ] **Embedding Model**: Evaluate `all-mpnet-base-v2` for richer semantics
+- [ ] **Batching & Performance**: Implement efficient batch processing (64/128 batch sizes)
+- [ ] **c-TF-IDF Keywords**: Add class-based TF-IDF hints for LLM analysis
+- [ ] **Config Migration**: Move to `pydantic-settings` from dataclass approach
+
+**Production Features (Phase 3)**:
+- [ ] **Hybrid Inference**: Rules → ML → LLM fallback approach
+- [ ] **Evaluation Framework**: 150-250 labeled subset with baseline comparisons
+- [ ] **Observability**: Structured JSON logging with run IDs and cost tracking
+- [ ] **Rate Limiting**: OpenAI API rate limiting with exponential backoff
+
+### 📈 Success Metrics Tracking
+
+Current baseline vs. targets:
+- **Incoming Email Detection**: 191 emails → Target: 300-500 emails
+- **Sentiment Categories**: 1 ("Administrative") → Target: 4-6 distinct categories
+- **Intent Categories**: 4 administrative → Target: 6-8 actionable business categories
+- **JSON Parse Success**: ~85% → Target: >95% with schema validation
+- **Processing Speed**: Variable → Target: <30s for 1000 emails
+
 ---
 
-*This TODO will be updated as tasks are completed and new requirements emerge.*
+*This TODO reflects current pipeline status and incorporates expert recommendations for production readiness. Updated as tasks are completed and requirements evolve.*
