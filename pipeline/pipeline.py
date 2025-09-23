@@ -5,6 +5,8 @@ Main pipeline orchestrator for email taxonomy discovery.
 
 import json
 import logging
+import signal
+import sys
 from pathlib import Path
 from typing import Dict, Any, Optional
 
@@ -24,6 +26,33 @@ class TaxonomyPipeline:
         self.config = config
         self.logger = self._setup_logging()
         self.state = {}  # Store intermediate results
+        self._setup_signal_handlers()
+
+    def _setup_signal_handlers(self) -> None:
+        """Set up signal handlers for graceful shutdown."""
+        def signal_handler(signum, frame):
+            self.logger.warning(f"Received signal {signum}. Shutting down pipeline...")
+            self._cleanup()
+            sys.exit(130 if signum == signal.SIGINT else 1)
+
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+
+    def _cleanup(self) -> None:
+        """Clean up resources and save state if needed."""
+        self.logger.info("Cleaning up pipeline resources...")
+        # Save any partial results if needed
+        if self.state and self.config.save_intermediate:
+            try:
+                state_file = self.config.get_output_path('pipeline_state.json')
+                with open(state_file, 'w') as f:
+                    # Only save serializable state
+                    serializable_state = {k: v for k, v in self.state.items()
+                                        if isinstance(v, (dict, list, str, int, float, bool))}
+                    json.dump(serializable_state, f, indent=2)
+                self.logger.info(f"Saved pipeline state to {state_file}")
+            except Exception as e:
+                self.logger.error(f"Failed to save pipeline state: {e}")
 
     def _setup_logging(self) -> logging.Logger:
         """Set up logging for the pipeline."""
@@ -70,7 +99,11 @@ class TaxonomyPipeline:
         self.state['taxonomy'] = curation_results
 
         self.logger.info("Pipeline completed successfully!")
-        return self._generate_summary()
+        summary = self._generate_summary()
+
+        # Explicit cleanup and exit
+        self._cleanup()
+        return summary
 
     def _run_data_processing(self) -> Dict[str, Any]:
         """Run data processing step."""

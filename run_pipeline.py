@@ -18,6 +18,9 @@ Usage examples:
 
 import argparse
 import sys
+import signal
+import os
+import atexit
 from pathlib import Path
 
 from pipeline.config import ConfigManager, PipelineConfig
@@ -85,8 +88,32 @@ def run_pipeline_quick(input_file: str, dataset_name: str | None = None) -> None
     print(f"Output directory: {Path(config.output_dir) / config.dataset_name}")
 
 
+def setup_signal_handlers():
+    """Set up signal handlers for graceful shutdown."""
+    def signal_handler(signum, frame):
+        print(f"\nReceived signal {signum}. Cleaning up and exiting...")
+        # Force exit to ensure process terminates
+        os._exit(0)
+
+    def cleanup_on_exit():
+        print("\n=== PIPELINE PROCESS TERMINATED ===")
+        # Ensure we exit cleanly
+        sys.stdout.flush()
+        sys.stderr.flush()
+
+    # Register signal handlers
+    signal.signal(signal.SIGINT, signal_handler)   # Ctrl+C
+    signal.signal(signal.SIGTERM, signal_handler)  # Termination
+
+    # Register cleanup function
+    atexit.register(cleanup_on_exit)
+
+
 def main():
     """Main CLI entry point."""
+    # Set up signal handling for proper cleanup
+    setup_signal_handlers()
+
     parser = argparse.ArgumentParser(
         description="Email Taxonomy Discovery Pipeline",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -138,12 +165,23 @@ Examples:
 
     args = parser.parse_args()
 
-    if args.create_template:
-        create_template_config(args.template_output)
-    elif args.config:
-        run_pipeline_from_config(args.config, args.steps)
-    elif args.input:
-        run_pipeline_quick(args.input, args.dataset_name)
+    try:
+        if args.create_template:
+            create_template_config(args.template_output)
+        elif args.config:
+            run_pipeline_from_config(args.config, args.steps)
+        elif args.input:
+            run_pipeline_quick(args.input, args.dataset_name)
+    except KeyboardInterrupt:
+        print("\nPipeline interrupted by user. Exiting...")
+        sys.exit(130)  # Standard exit code for SIGINT
+    except Exception as e:
+        print(f"\nPipeline failed with error: {e}")
+        sys.exit(1)
+    finally:
+        # Ensure we exit cleanly
+        print("\n=== PIPELINE EXECUTION FINISHED ===")
+        sys.exit(0)
 
 
 if __name__ == "__main__":
