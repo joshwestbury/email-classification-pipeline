@@ -45,7 +45,7 @@ class LLMClusterAnalysis(BaseModel):
 class LLMAnalyzer:
     """Analyzes email clusters and proposes categories using LLM."""
 
-    def __init__(self, model: str = "gpt-4o", top_clusters: int = 8, api_key: Optional[str] = None):
+    def __init__(self, model: str = "gpt-4o", top_clusters: int = 26, api_key: Optional[str] = None):
         self.model = model
         self.top_clusters = top_clusters
 
@@ -350,13 +350,18 @@ class LLMAnalyzer:
         logger.info("Starting LLM cluster analysis...")
 
         cluster_analysis = cluster_results.get('cluster_analysis', {})
-        top_clusters = cluster_results.get('top_clusters', [])[:self.top_clusters]
+        selected_clusters = cluster_results.get('top_clusters', [])
 
-        if not top_clusters:
+        # Limit to our maximum if more clusters were selected
+        if len(selected_clusters) > self.top_clusters:
+            logger.info(f"Limiting analysis from {len(selected_clusters)} to {self.top_clusters} clusters")
+            selected_clusters = selected_clusters[:self.top_clusters]
+
+        if not selected_clusters:
             logger.warning("No clusters found for analysis")
             return {"error": "No clusters available for analysis"}
 
-        logger.info(f"Analyzing top {len(top_clusters)} clusters: {top_clusters}")
+        logger.info(f"Analyzing {len(selected_clusters)} selected clusters (multi-criteria selection): {selected_clusters}")
 
         # Enrich clusters with sentiment analysis
         logger.info("Enriching clusters with pattern-based sentiment analysis...")
@@ -370,7 +375,7 @@ class LLMAnalyzer:
         cluster_analyses = {}
         total_emails_analyzed = 0
 
-        for cluster_id in tqdm(top_clusters, desc="Analyzing clusters"):
+        for cluster_id in tqdm(selected_clusters, desc="Analyzing clusters"):
             cluster_info = cluster_analysis.get(cluster_id, {})
             cluster_size = cluster_info.get('size', 0)
 
@@ -420,7 +425,8 @@ class LLMAnalyzer:
 
         results = {
             'analysis_summary': {
-                'clusters_analyzed': len(top_clusters),
+                'clusters_analyzed': len(selected_clusters),
+                'clusters_selected_by_criteria': 'multi-criteria (base + emotional + extended)',
                 'successful_analyses': len([a for a in cluster_analyses.values() if 'error' not in a]),
                 'successful_validations': successful_validations,
                 'failed_validations': failed_validations,
