@@ -426,7 +426,7 @@ class LLMAnalyzer:
         results = {
             'analysis_summary': {
                 'clusters_analyzed': len(selected_clusters),
-                'clusters_selected_by_criteria': 'multi-criteria (base + emotional + extended)',
+                'clusters_selected_by_criteria': 'all_clusters (comprehensive analysis)',
                 'successful_analyses': len([a for a in cluster_analyses.values() if 'error' not in a]),
                 'successful_validations': successful_validations,
                 'failed_validations': failed_validations,

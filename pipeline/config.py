@@ -36,7 +36,7 @@ class PipelineConfig:
 
     # LLM analysis
     openai_model: str = "gpt-4o"
-    analyze_top_clusters: int = 26
+    analyze_top_clusters: int = 500  # Set high limit to analyze ALL clusters
 
     # Output settings
     output_dir: str = "outputs"

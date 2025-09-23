@@ -240,8 +240,8 @@ class Clusterer:
         if '-1' in cluster_analysis:
             sorted_clusters.append(('-1', cluster_analysis['-1']))
 
-        # Multi-criteria cluster selection for analysis
-        selected_clusters = self._select_clusters_for_analysis(cluster_analysis)
+        # Analyze ALL clusters approach - select all non-noise clusters
+        selected_clusters = self._select_all_clusters_for_analysis(cluster_analysis)
 
         results = {
             'cluster_labels': cluster_labels.tolist(),
@@ -258,74 +258,22 @@ class Clusterer:
         logger.info(f"Clustering analysis complete: {len(selected_clusters)} clusters selected for LLM analysis")
         return results
 
-    def _select_clusters_for_analysis(self, cluster_analysis: Dict[str, Any]) -> List[str]:
-        """Select clusters for LLM analysis using multi-criteria approach."""
-        # Step 1: Top 10 clusters by size (base coverage)
-        size_sorted = sorted(
+    def _select_all_clusters_for_analysis(self, cluster_analysis: Dict[str, Any]) -> List[str]:
+        """Select ALL clusters for comprehensive analysis (excluding noise cluster -1)."""
+        # Get all non-noise clusters, sorted by size (largest first)
+        all_clusters = sorted(
             [(k, v) for k, v in cluster_analysis.items() if k != '-1'],
             key=lambda x: x[1]['size'],
             reverse=True
         )
-        base_clusters = [cluster_id for cluster_id, _ in size_sorted[:10]]
 
-        # Step 2: Find emotional priority clusters
-        emotional_clusters = self._find_emotional_priority_clusters(cluster_analysis)
+        selected_clusters = [cluster_id for cluster_id, _ in all_clusters]
 
-        # Step 3: Combine and deduplicate
-        priority_clusters = list(set(base_clusters + emotional_clusters))
+        logger.info(f"Analyze ALL clusters approach: Selected {len(selected_clusters)} clusters for comprehensive analysis")
+        logger.info(f"This ensures complete coverage of all sentiment categories, including minority sentiments")
 
-        # Step 4: Fill to 20-26 total clusters with next largest
-        max_clusters = min(26, len([k for k in cluster_analysis.keys() if k != '-1']))
-        remaining_slots = max_clusters - len(priority_clusters)
+        return selected_clusters
 
-        if remaining_slots > 0:
-            additional_clusters = [
-                cluster_id for cluster_id, _ in size_sorted
-                if cluster_id not in priority_clusters
-            ][:remaining_slots]
-            priority_clusters.extend(additional_clusters)
-
-        logger.info(f"Cluster selection: {len(base_clusters)} base + {len(emotional_clusters)} emotional + {remaining_slots} additional = {len(priority_clusters)} total")
-        return priority_clusters
-
-    def _find_emotional_priority_clusters(self, cluster_analysis: Dict[str, Any]) -> List[str]:
-        """Find clusters with high-confidence emotional sentiments."""
-        emotional_clusters = []
-        emotional_sentiments = ['frustrated', 'angry', 'desperate', 'urgent', 'apologetic']
-
-        for cluster_id, cluster_info in cluster_analysis.items():
-            if cluster_id == '-1':  # Skip noise
-                continue
-
-            sentiment_analysis = cluster_info.get('sentiment_analysis', {})
-
-            # Check for high-confidence emotional sentiments
-            high_confidence_sentiments = sentiment_analysis.get('high_confidence_sentiments', [])
-            for sentiment_info in high_confidence_sentiments:
-                if (sentiment_info.get('sentiment') in emotional_sentiments and
-                    sentiment_info.get('confidence', 0) > 0.6):
-                    emotional_clusters.append(cluster_id)
-                    logger.info(f"Emotional priority: Cluster {cluster_id} selected for '{sentiment_info['sentiment']}' (confidence: {sentiment_info['confidence']:.2f})")
-                    break
-
-            # Check for minority sentiments that were promoted to dominant
-            dominant_sentiment = sentiment_analysis.get('dominant_sentiment', '')
-            minority_sentiments = sentiment_analysis.get('minority_sentiments', [])
-
-            if dominant_sentiment in emotional_sentiments:
-                # Check if this was promoted from minority
-                for minority in minority_sentiments:
-                    if (minority.get('sentiment') == dominant_sentiment and
-                        minority.get('confidence', 0) > 0.15):
-                        if cluster_id not in emotional_clusters:
-                            emotional_clusters.append(cluster_id)
-                            logger.info(f"Minority promotion: Cluster {cluster_id} selected for promoted '{dominant_sentiment}' sentiment")
-                        break
-
-        # Limit to 4-6 emotional clusters as specified
-        emotional_clusters = emotional_clusters[:6]
-        logger.info(f"Found {len(emotional_clusters)} emotional priority clusters: {emotional_clusters}")
-        return emotional_clusters
 
     def save_results(self, cluster_results: Dict[str, Any], output_path: str) -> None:
         """Save clustering results to JSON file."""
