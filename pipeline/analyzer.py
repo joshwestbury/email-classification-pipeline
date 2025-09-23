@@ -16,6 +16,7 @@ import logging
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field, ValidationError
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from .sentiment_analyzer import SentimentAnalyzer
 
 # Load environment variables
 load_dotenv()
@@ -47,6 +48,9 @@ class LLMAnalyzer:
     def __init__(self, model: str = "gpt-4o", top_clusters: int = 8, api_key: Optional[str] = None):
         self.model = model
         self.top_clusters = top_clusters
+
+        # Initialize sentiment analyzer
+        self.sentiment_analyzer = SentimentAnalyzer()
 
         # Initialize OpenAI client
         if api_key:
@@ -179,6 +183,7 @@ class LLMAnalyzer:
         cluster_info = cluster_analysis.get(cluster_id, {})
         cluster_size = cluster_info.get('size', 0)
         cluster_percentage = cluster_info.get('percentage', 0)
+        sentiment_analysis = cluster_info.get('sentiment_analysis', {})
 
         # Prepare prompt with sample emails
         samples_text = ""
@@ -197,6 +202,12 @@ class LLMAnalyzer:
         - Cluster ID: {cluster_id}
         - Cluster Size: {cluster_size} incoming customer emails
         - Percentage of Incoming Emails: {cluster_percentage:.1f}%
+
+        Pattern-Based Sentiment Analysis (Pre-Analysis):
+        - Dominant Sentiment: {sentiment_analysis.get('dominant_sentiment', 'unknown')}
+        - Average Confidence: {sentiment_analysis.get('avg_confidence', 0.0):.2f}
+        - Sentiment Distribution: {sentiment_analysis.get('distribution', {})}
+        - Sample Sentiment Results: {sentiment_analysis.get('sample_results', [])}
 
         Your task is to:
         1. Identify the SPECIFIC intent/purpose of these customer emails (not generic categories)
@@ -315,6 +326,11 @@ class LLMAnalyzer:
 
         logger.info(f"Analyzing top {len(top_clusters)} clusters: {top_clusters}")
 
+        # Enrich clusters with sentiment analysis
+        logger.info("Enriching clusters with pattern-based sentiment analysis...")
+        emails = source_data.get('emails', [])
+        enriched_cluster_analysis = self.sentiment_analyzer.enrich_clusters_with_sentiment(cluster_analysis, emails)
+
         # Analyze each cluster
         cluster_analyses = {}
         total_emails_analyzed = 0
@@ -323,7 +339,7 @@ class LLMAnalyzer:
             cluster_info = cluster_analysis.get(cluster_id, {})
             cluster_size = cluster_info.get('size', 0)
 
-            analysis = self.analyze_cluster_with_llm(cluster_id, cluster_analysis, source_data)
+            analysis = self.analyze_cluster_with_llm(cluster_id, enriched_cluster_analysis, source_data)
             cluster_analyses[cluster_id] = analysis
 
             if 'error' not in analysis:
