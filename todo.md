@@ -284,28 +284,68 @@ Latest pipeline run (`outputs/output_analysis_1/`) produces:
     - [ ] Test different clustering parameters and prompt variations
     - [ ] Document performance improvements quantitatively
 
+### ✅ PHASE 2.1.5 COMPLETED: Enhanced PII Anonymization Security
+
+**Status**: COMPLETE - Production-ready security enhancements implemented (September 22, 2025)
+
+**Key Achievements**:
+- ✅ **Salted SHA256 Hashing**: Replaced MD5 with cryptographically secure SHA256 + 32-byte salt
+- ✅ **Persistent Salt Management**: Auto-generated `.anonymization_salt` file with 600 permissions
+- ✅ **Enhanced PII Patterns**: Added credit card, IBAN, SSN, enhanced postal codes
+- ✅ **Confidence-Based Tiering**: Three-tier system (HIGH/MEDIUM/LOW) with configurable threshold
+- ✅ **Production Testing**: Successfully processed 5,842 emails with 287 PII detections
+
+**Technical Implementation**:
+1. **Security Enhancements** 🔐
+   - [x] Implemented `_load_or_create_salt()` for persistent salt management
+   - [x] SHA256 with 8-character hash identifiers for better uniqueness
+   - [x] Secure file permissions (0o600) for salt storage
+
+2. **Comprehensive PII Detection** 📋
+   - [x] **Credit Cards**: Visa, MasterCard, Amex, Discover patterns
+   - [x] **IBAN**: International bank account numbers
+   - [x] **SSN**: US Social Security Numbers (XXX-XX-XXXX and XXXXXXXXX)
+   - [x] **Postal Codes**: US ZIP, UK, Canadian, Australian formats
+   - [x] **Enhanced Addresses**: Added more street type variations
+
+3. **Confidence System** 🎯
+   - [x] HIGH: Email, phone, credit card, IBAN (always detected)
+   - [x] MEDIUM: SSN, addresses, account numbers, tax IDs
+   - [x] LOW: Postal codes (prone to false positives)
+   - [x] `detect_pii()` method for analysis without anonymization
+
+**Files Modified**:
+- `pipeline/anonymizer.py` - Complete security overhaul with SHA256, salt management, and enhanced patterns
+- Commit: "Clean up project structure and switch to all-mpnet-base-v2 embedding model"
+
+**Test Results** (from `outputs/secure_pii_test/`):
+- 5,842 emails processed, 3,975 anonymized (68% success rate)
+- 287 total PII instances detected across 6 categories
+- Confidence distribution: 14,118 high, 5,049 medium, 0 low
+- Salt configured and persistent across runs
+
 #### Implementation Priority Order (Based on ChatGPT Expert Analysis)
 
-**IMMEDIATE (High Priority)**:
-1. **PII Anonymization Security** 🔒
-   - [ ] Implement deterministic salted SHA256 hashing (replace MD5 in `anonymizer.py`)
-   - [ ] Add IBAN/credit card/postal address patterns
-   - [ ] Implement confidence-based tiering for PII detection
-
-2. **JSON Schema Validation** 📋
+**IMMEDIATE (High Priority)** - NEXT UP:
+1. **JSON Schema Validation** 📋
    - [ ] Add strict JSON schema validation to `analyzer.py` LLM responses
    - [ ] Implement pydantic models for structured output validation
    - [ ] Add retry logic with exponential backoff for failed validations
 
-**Week 1**: Enhanced Data Processing & Classification
-- Fix the core issue of missing customer emails (Phase 2.1)
-- Implement near-duplicate detection using cosine similarity
+**COMPLETED**:
+- ✅ PII Anonymization Security - Salted SHA256 with comprehensive patterns
+- ✅ Email Direction Classification - 3.9x improvement in detection
+
+**Week 1**: JSON Schema & Data Quality
+- Implement strict JSON schema validation (Phase 2.1.6)
+- Near-duplicate detection using cosine similarity
 - Enhanced thread context handling with bounded context
 
 **Week 2**: Embedding & Clustering Improvements
-- Evaluate `all-mpnet-base-v2` model for richer semantics (Phase 2.2)
-- Implement batching and device optimization for embeddings
-- Add c-TF-IDF keyword extraction for LLM hints
+- ✅ **DONE**: Switched to `all-mpnet-base-v2` model for richer semantics
+- [ ] Implement batching and device optimization for embeddings
+- [ ] Add c-TF-IDF keyword extraction for LLM hints
+- [ ] Multi-dimensional clustering for sentiment detection (Phase 2.2)
 
 **Week 3**: LLM Analysis & Production Features
 - Structured output with strict JSON schema enforcement (Phase 2.3)
@@ -474,21 +514,25 @@ scg-ai-collection-notes/
 
 ### 🚀 Next Immediate Actions (Updated Priority)
 
-**PRIORITY 1: Security & Production Readiness (ChatGPT Critical Items)**
+**✅ COMPLETED: PII Security Enhancement** (September 22, 2025)
+- Implemented salted SHA256 hashing with 32-byte salt
+- Added comprehensive PII patterns (credit cards, IBAN, SSN)
+- Confidence-based tiering with configurable thresholds
+- Persistent salt management with secure file permissions
 
-1. **PII Security Enhancement** (Day 1-2) 🔒
-   ```bash
-   # Implement salted SHA256 hashing in anonymizer.py
-   # Replace MD5 with cryptographically secure approach
-   # Add persistent salt management for consistency
-   ```
+**PRIORITY 1: JSON Schema Validation** (NEXT UP) 📋
+```bash
+# Add pydantic models to analyzer.py
+# Implement strict schema validation for LLM responses
+# Add retry logic with exponential backoff for failed validations
+```
 
-2. **JSON Schema Validation** (Day 2-3) 📋
-   ```bash
-   # Add pydantic models to analyzer.py
-   # Implement strict schema validation for LLM responses
-   # Add retry logic for failed validations
-   ```
+**PRIORITY 2: Near-Duplicate Detection** 🔍
+```bash
+# Implement cosine similarity checking in data_processor.py
+# Add 0.95 threshold for duplicate detection
+# Prevent redundant processing of similar emails
+```
 
 **✅ COMPLETED: Email Direction Classification Enhancement**
 
@@ -512,13 +556,13 @@ scg-ai-collection-notes/
 ### 📊 Expert Recommendations Implementation Tracker
 
 **High Priority (Immediate Implementation)**:
-- [ ] **PII Security**: Salted SHA256 hashing with persistent salt (`anonymizer.py`)
+- [x] ✅ **PII Security**: Salted SHA256 hashing with persistent salt (`anonymizer.py`)
 - [ ] **JSON Validation**: Strict schema enforcement with pydantic models (`analyzer.py`)
 - [ ] **Near-duplicate Detection**: Cosine similarity with 0.95 threshold (`data_processor.py`)
 - [ ] **Enhanced Thread Context**: Bounded context (1-2 previous messages) (`embedder.py`)
 
 **Medium Priority (Phase 2 Development)**:
-- [ ] **Embedding Model**: Evaluate `all-mpnet-base-v2` for richer semantics
+- [x] ✅ **Embedding Model**: Switched to `all-mpnet-base-v2` for richer semantics
 - [ ] **Batching & Performance**: Implement efficient batch processing (64/128 batch sizes)
 - [ ] **c-TF-IDF Keywords**: Add class-based TF-IDF hints for LLM analysis
 - [ ] **Config Migration**: Move to `pydantic-settings` from dataclass approach
