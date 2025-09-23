@@ -14,11 +14,31 @@ import re
 import random
 import logging
 from dotenv import load_dotenv
+from pydantic import BaseModel, Field, ValidationError
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 # Load environment variables
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+
+class LLMClusterAnalysis(BaseModel):
+    """Pydantic model for LLM cluster analysis response validation."""
+
+    proposed_intent: str = Field(..., min_length=1, max_length=200, description="Specific intent category name")
+    intent_definition: str = Field(..., min_length=10, max_length=500, description="Precise definition of customer intent")
+    proposed_sentiment: str = Field(..., min_length=1, max_length=200, description="Specific emotional tone category name")
+    sentiment_definition: str = Field(..., min_length=10, max_length=500, description="Precise definition of emotional state")
+    decision_rules: List[str] = Field(..., min_items=1, max_items=10, description="Specific decision rules for classification")
+    confidence: str = Field(..., pattern=r'^(high|medium|low)$', description="Confidence level in analysis")
+    sample_indicators: List[str] = Field(..., min_items=1, max_items=10, description="Specific phrases indicating this category")
+    emotional_markers: List[str] = Field(default_factory=list, max_items=10, description="Emotional indicators in text")
+    reasoning: str = Field(..., min_length=20, max_length=1000, description="Detailed explanation of clustering rationale")
+    business_relevance: str = Field(..., min_length=10, max_length=500, description="Business value for collections operations")
+
+    class Config:
+        extra = "forbid"  # Reject any extra fields not defined in schema
 
 
 class LLMAnalyzer:
@@ -100,6 +120,49 @@ class LLMAnalyzer:
             content = content[:max_length] + "..."
 
         return content.strip()
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=4, max=10),
+        retry=retry_if_exception_type((ValidationError, json.JSONDecodeError, KeyError))
+    )
+    def _make_llm_request_with_validation(self, prompt: str, cluster_id: str) -> LLMClusterAnalysis:
+        """Make LLM request with validation and retry logic."""
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are an expert in customer service and collections email analysis. You help categorize customer communications for business intelligence and automated processing. You MUST respond with valid JSON only - no other text, explanations, or formatting."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.1,
+                max_tokens=1000
+            )
+
+            response_text = response.choices[0].message.content.strip()
+            logger.debug(f"Raw LLM response for cluster {cluster_id}: {response_text[:200]}...")
+
+            # Extract JSON from response
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            if not json_match:
+                raise ValueError(f"No JSON object found in LLM response for cluster {cluster_id}")
+
+            # Parse and validate JSON
+            raw_json = json.loads(json_match.group())
+            validated_response = LLMClusterAnalysis(**raw_json)
+
+            logger.info(f"Successfully validated LLM response for cluster {cluster_id}")
+            return validated_response
+
+        except ValidationError as e:
+            logger.error(f"Validation error for cluster {cluster_id}: {e}")
+            raise
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON decode error for cluster {cluster_id}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error for cluster {cluster_id}: {e}")
+            raise
 
     def analyze_cluster_with_llm(self, cluster_id: str, cluster_analysis: Dict[str, Any], source_data: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze a single cluster using LLM to propose categories."""
@@ -200,55 +263,44 @@ class LLMAnalyzer:
         """
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "You are an expert in customer service and collections email analysis. You help categorize customer communications for business intelligence and automated processing. You MUST respond with valid JSON only - no other text, explanations, or formatting."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.1,
-                max_tokens=1000
-            )
+            # Use retry-enabled LLM request with validation
+            validated_response = self._make_llm_request_with_validation(prompt, cluster_id)
 
-            # Parse JSON response
-            response_text = response.choices[0].message.content.strip()
+            # Convert validated pydantic model to dict and add metadata
+            analysis_result = validated_response.model_dump()
+            analysis_result['cluster_id'] = cluster_id
+            analysis_result['cluster_size'] = cluster_size
+            analysis_result['cluster_percentage'] = cluster_percentage
+            analysis_result['sample_count'] = len(sample_emails)
+            analysis_result['validation_status'] = 'success'
 
-            # Extract JSON from response with improved robustness
-            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-            if json_match:
-                try:
-                    analysis_result = json.loads(json_match.group())
+            logger.info(f"Successfully analyzed cluster {cluster_id} with validation")
+            return analysis_result
 
-                    # Validate required fields are present
-                    required_fields = ['proposed_intent', 'proposed_sentiment']
-                    missing_fields = [field for field in required_fields if not analysis_result.get(field)]
-
-                    if missing_fields:
-                        logger.error(f"LLM response for cluster {cluster_id} missing required fields: {missing_fields}")
-                        return {"error": f"Missing required fields: {missing_fields}", "raw_response": response_text}
-
-                    # Add cluster metadata
-                    analysis_result['cluster_id'] = cluster_id
-                    analysis_result['cluster_size'] = cluster_size
-                    analysis_result['cluster_percentage'] = cluster_percentage
-                    analysis_result['sample_count'] = len(sample_emails)
-
-                    # Ensure emotional_markers field exists for emotional tone analysis
-                    if 'emotional_markers' not in analysis_result:
-                        analysis_result['emotional_markers'] = []
-
-                    return analysis_result
-
-                except json.JSONDecodeError as e:
-                    logger.error(f"JSON parsing error for cluster {cluster_id}: {str(e)}")
-                    return {"error": f"JSON parsing error: {str(e)}", "raw_response": response_text}
-            else:
-                logger.error(f"Could not extract JSON from LLM response for cluster {cluster_id}")
-                return {"error": "Failed to parse LLM response", "raw_response": response_text}
-
+        except ValidationError as e:
+            logger.error(f"Final validation failure for cluster {cluster_id} after retries: {e}")
+            return {
+                "error": f"Validation failed after retries: {str(e)}",
+                "cluster_id": cluster_id,
+                "validation_status": "failed",
+                "error_type": "validation_error"
+            }
+        except json.JSONDecodeError as e:
+            logger.error(f"Final JSON decode failure for cluster {cluster_id} after retries: {e}")
+            return {
+                "error": f"JSON decode failed after retries: {str(e)}",
+                "cluster_id": cluster_id,
+                "validation_status": "failed",
+                "error_type": "json_decode_error"
+            }
         except Exception as e:
-            logger.error(f"Error analyzing cluster {cluster_id}: {str(e)}")
-            return {"error": str(e)}
+            logger.error(f"Unexpected error analyzing cluster {cluster_id}: {str(e)}")
+            return {
+                "error": f"Unexpected error: {str(e)}",
+                "cluster_id": cluster_id,
+                "validation_status": "failed",
+                "error_type": "unexpected_error"
+            }
 
     def analyze_clusters(self, cluster_results: Dict[str, Any], source_data: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze top clusters and propose taxonomy categories."""
@@ -277,9 +329,14 @@ class LLMAnalyzer:
             if 'error' not in analysis:
                 total_emails_analyzed += cluster_size
 
-        # Generate summary statistics
+        # Generate summary statistics with validation tracking
         total_emails = sum(info.get('size', 0) for info in cluster_analysis.values() if info.get('cluster_id', -1) != -1)
         coverage_percentage = (total_emails_analyzed / total_emails * 100) if total_emails > 0 else 0
+
+        # Count validation results
+        successful_validations = len([a for a in cluster_analyses.values() if a.get('validation_status') == 'success'])
+        failed_validations = len([a for a in cluster_analyses.values() if a.get('validation_status') == 'failed'])
+        validation_success_rate = (successful_validations / len(cluster_analyses) * 100) if cluster_analyses else 0
 
         # Compile proposed categories
         intent_categories = {}
@@ -314,6 +371,9 @@ class LLMAnalyzer:
             'analysis_summary': {
                 'clusters_analyzed': len(top_clusters),
                 'successful_analyses': len([a for a in cluster_analyses.values() if 'error' not in a]),
+                'successful_validations': successful_validations,
+                'failed_validations': failed_validations,
+                'validation_success_rate': round(validation_success_rate, 1),
                 'total_emails_in_analyzed_clusters': total_emails_analyzed,
                 'coverage_percentage': round(coverage_percentage, 1),
                 'model_used': self.model
@@ -332,6 +392,7 @@ class LLMAnalyzer:
 
         logger.info(f"LLM analysis complete: {len(intent_categories)} intent categories, {len(sentiment_categories)} sentiment categories")
         logger.info(f"Coverage: {coverage_percentage:.1f}% of emails ({total_emails_analyzed}/{total_emails})")
+        logger.info(f"Validation: {validation_success_rate:.1f}% success rate ({successful_validations}/{len(cluster_analyses)} clusters)")
 
         return results
 
