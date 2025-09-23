@@ -210,6 +210,16 @@ class TaxonomyPipeline:
 
         analysis_results = analyzer.analyze_clusters(cluster_results, source_data)
 
+        # Update cluster results with enriched sentiment analysis
+        if 'enriched_cluster_analysis' in analysis_results:
+            cluster_results['cluster_analysis'] = analysis_results['enriched_cluster_analysis']
+            # Re-save the updated cluster results
+            if self.config.save_intermediate:
+                cluster_output_path = self.config.get_output_path('cluster_results.json')
+                with open(cluster_output_path, 'w') as f:
+                    json.dump(cluster_results, f, indent=2)
+                self.logger.info(f"Updated cluster results with sentiment analysis saved to {cluster_output_path}")
+
         if self.config.save_intermediate:
             output_path = self.config.get_output_path('taxonomy_analysis.json')
             analyzer.save_results(analysis_results, str(output_path))

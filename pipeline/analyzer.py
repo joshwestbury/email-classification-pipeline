@@ -196,7 +196,9 @@ class LLMAnalyzer:
         prompt = f"""
         Analyze the following collection of INCOMING CUSTOMER emails that have been clustered together based on semantic similarity. These are emails RECEIVED by a collections/accounts receivable department FROM CUSTOMERS.
 
-        CRITICAL: Create SPECIFIC, GRANULAR categories that capture distinct customer communication patterns. Avoid generic categories - focus on precise business intents and emotional tones.
+        CRITICAL: Create SPECIFIC, GRANULAR categories that capture distinct customer communication patterns.
+
+        SENTIMENT DIVERSITY REQUIREMENT: You MUST avoid consolidating different emotional tones into generic categories like "Professional" or "Administrative". Each cluster should reflect the actual emotional state of customers.
 
         Cluster Statistics:
         - Cluster ID: {cluster_id}
@@ -209,11 +211,19 @@ class LLMAnalyzer:
         - Sentiment Distribution: {sentiment_analysis.get('distribution', {})}
         - Sample Sentiment Results: {sentiment_analysis.get('sample_results', [])}
 
+        MANDATORY SENTIMENT ANALYSIS RULES:
+        - If pre-analysis shows "frustrated" patterns, you MUST categorize as Frustrated sentiment
+        - If pre-analysis shows "cooperative" patterns, you MUST categorize as Cooperative sentiment
+        - If pre-analysis shows "urgent" patterns, you MUST categorize as Urgent sentiment
+        - If pre-analysis shows "apologetic" patterns, you MUST categorize as Apologetic sentiment
+        - Only use "Professional" if there are truly NO emotional indicators whatsoever
+
         Your task is to:
         1. Identify the SPECIFIC intent/purpose of these customer emails (not generic categories)
-        2. Determine the PRECISE emotional tone and communication style
+        2. Determine the PRECISE emotional tone - RESPECT the pre-analysis sentiment indicators
         3. Create distinct, actionable categories for collections processing
         4. Suggest precise decision rules with specific indicators
+        5. PRESERVE sentiment diversity - do not default to "Professional" unless truly neutral
 
         Sample CUSTOMER emails from the cluster:
         {samples_text}
@@ -254,16 +264,17 @@ class LLMAnalyzer:
         - Acknowledgment of Receipt (confirming they received communication)
         - Third Party Authorization (involving lawyers, representatives)
 
-        Create SPECIFIC sentiment categories that capture emotional tone:
-        - Apologetic (expressing regret, taking responsibility)
-        - Frustrated (showing irritation, anger, dissatisfaction)
-        - Cooperative (willing to work together, positive engagement)
-        - Defensive (making excuses, deflecting responsibility)
-        - Urgent (expressing time pressure, emergency situations)
-        - Professional (formal business tone, neutral emotion)
-        - Confused (seeking clarification, expressing uncertainty)
-        - Grateful (appreciative, thankful for assistance)
-        - Desperate (pleading, expressing severe financial stress)
+        REQUIRED SENTIMENT DETECTION - Match these EXACT categories based on emotional content:
+        - Frustrated: ANY signs of irritation, dissatisfaction, anger, "unacceptable", "ridiculous"
+        - Cooperative: Willing to work together, "happy to", "working with you", positive engagement
+        - Apologetic: Expressing regret, "sorry", "apologize", taking responsibility
+        - Urgent: Time pressure, "urgent", "asap", "immediately", emergency language
+        - Confused: Seeking clarification, "don't understand", "unclear", uncertainty
+        - Grateful: Appreciative tone, "thank you", thankful for assistance
+        - Desperate: Pleading, severe stress, "please help", financial distress
+        - Professional: ONLY if completely neutral with no emotional markers detected
+
+        CRITICAL: The pre-analysis sentiment data above shows what was detected by pattern matching. You MUST respect these findings and NOT default to "Professional" when other sentiments are present.
 
         IMPORTANT GUIDELINES:
         - Avoid generic terms like "Administrative" or "Information Request"
@@ -330,6 +341,9 @@ class LLMAnalyzer:
         logger.info("Enriching clusters with pattern-based sentiment analysis...")
         emails = source_data.get('emails', [])
         enriched_cluster_analysis = self.sentiment_analyzer.enrich_clusters_with_sentiment(cluster_analysis, emails)
+
+        # Save enriched cluster analysis for reference
+        logger.info("Sentiment enrichment completed - enriched data will be used for LLM analysis")
 
         # Analyze each cluster
         cluster_analyses = {}
@@ -400,6 +414,7 @@ class LLMAnalyzer:
                 'sentiment_categories': sentiment_categories
             },
             'clustering_stats': cluster_results.get('cluster_stats', {}),
+            'enriched_cluster_analysis': enriched_cluster_analysis,
             'configuration': {
                 'model': self.model,
                 'top_clusters_analyzed': self.top_clusters
