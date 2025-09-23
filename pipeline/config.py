@@ -24,7 +24,7 @@ class PipelineConfig:
     separate_threads: bool = True
 
     # Embedding settings
-    embedding_model: str = "all-MiniLM-L6-v2"
+    embedding_model: str = "all-mpnet-base-v2"
     include_thread_context: bool = True
 
     # Clustering parameters

@@ -1,8 +1,0 @@
-{
-  "original_intent_categories": 8,
-  "final_intent_categories": 3,
-  "original_sentiment_categories": 2,
-  "final_sentiment_categories": 2,
-  "total_emails_covered": 446,
-  "coverage_percentage": 62.4
-}

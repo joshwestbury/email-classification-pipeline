@@ -1,0 +1,105 @@
+# Collection Notes AI - Sentiment and Intent Taxonomy
+# Derived from clustering analysis of 595 real collection emails
+# Production-ready categories for NetSuite Collection Notes automation
+
+version: "1.0"
+generated_date: "2024-09-19"
+source_emails: 595
+clusters_analyzed: 8
+coverage: "83.5%"  # 595 emails from top 8 clusters
+
+# INTENT CATEGORIES
+# Consolidated from 8 clusters into 2 actionable categories
+intent_categories:
+
+  account_information_update:
+    display_name: "Account Information Update"
+    description: "The customer is requesting to update their banking and address information on their account records."
+    business_value: "This category helps collections operations ensure that customer records are accurate and up-to-date, preventing potential payment processing issues and maintaining effective communication channels."
+    coverage: "92.3%"  # 549 emails
+    decision_rules:
+      - "If the email mentions updating banking information, categorize as Account Information Update."
+      - "If the email includes a request to update address details, categorize as Account Information Update."
+      - "If the email is devoid of emotional language and focuses on factual updates, categorize as Professional."
+    key_indicators:
+      - "updated our banking information"
+      - "update your records"
+      - "updated our Chicago address"
+      - "updated our banking information"
+      - "cancel and process a refund"
+      - "put me in touch with a manager"
+    examples:
+      - "Can you updated our banking information for my account?"
+      - "Can you update your records for my account?"
+      - "Can you updated our chicago address for my account?"
+
+  acknowledgment_of_receipt:
+    display_name: "Acknowledgment of Receipt"
+    description: "The customer is acknowledging receipt of previous communication or documents without providing additional information or requests."
+    business_value: "Understanding acknowledgment emails helps collections teams confirm receipt of communications and documents, ensuring that the customer is informed and aware of previous interactions."
+    coverage: "7.7%"  # 46 emails
+    decision_rules:
+      - "If the email contains a simple acknowledgment without further requests, categorize as Acknowledgment of Receipt."
+      - "If the email lacks a subject and contains only a signature or closing, categorize as Acknowledgment of Receipt."
+      - "If the email includes disclaimers or confidentiality notices without additional content, categorize as Acknowledgment of Receipt."
+    key_indicators:
+      - "Regards, WASH Accounts Payable Team"
+      - "Sincerely, Litera"
+      - "approved"
+    examples:
+      - "Email mentions: Regards, WASH Accounts Payable Team"
+      - "Email mentions: Sincerely, Litera"
+      - "Email mentions: approved"
+
+# SENTIMENT CATEGORIES
+# Consolidated from 1 categories into distinct sentiment levels
+sentiment_categories:
+
+  professional:
+    display_name: "Professional"
+    description: "The customer communicates in a formal and neutral tone, focusing on business-related updates without expressing any emotional undertone."
+    business_value: "Track customer sentiment patterns"
+    coverage: "100.0%"  # 595 emails
+    decision_rules:
+    key_indicators:
+    examples:
+
+# MODIFIER FLAGS
+# Additional flags for special handling
+modifier_flags:
+
+  urgency:
+    description: "Communication indicates time-sensitive matter"
+    indicators: ["urgent", "asap", "immediately", "deadline", "overdue"]
+
+  escalation:
+    description: "Customer mentions involving management or external parties"
+    indicators: ["manager", "supervisor", "escalate", "complaint", "legal"]
+
+  payment_commitment:
+    description: "Customer makes specific payment promise or timeline"
+    indicators: ["will pay", "payment scheduled", "check sent", "processing payment"]
+
+# VALIDATION RULES
+validation_rules:
+  mutual_exclusivity:
+    - "Each email must have exactly one intent category"
+    - "Each email must have exactly one sentiment category"
+    - "Modifier flags are optional and non-exclusive"
+
+  confidence_thresholds:
+    high_confidence: "Clear indicators present, unambiguous categorization"
+    medium_confidence: "Some indicators present, minor ambiguity"
+    low_confidence: "Weak indicators, significant ambiguity - flag for human review"
+
+# BUSINESS MAPPING
+netsuite_integration:
+  collection_note_fields:
+    sentiment: "Maps to Collection Note Sentiment picklist"
+    intent: "Maps to Collection Note Category field"
+    modifiers: "Maps to Collection Note Priority/Flags fields"
+
+  automation_triggers:
+    cooperative_payment_inquiry: "Auto-acknowledge receipt, provide status update"
+    invoice_management: "Route to billing team, auto-request documentation"
+    frustrated: "Priority queue, assign to senior collector"
