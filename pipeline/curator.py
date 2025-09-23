@@ -753,23 +753,20 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
             sentiment_categories[sentiment_name]['clusters'].append(cluster_id)
             sentiment_categories[sentiment_name]['total_emails'] += analysis.get('cluster_size', 0)
 
-        logger.info(f"Extracted {len(intent_categories)} raw intent categories before consolidation")
+        logger.info(f"Extracted {len(intent_categories)} raw intent categories")
+        logger.info(f"Extracted {len(sentiment_categories)} raw sentiment categories")
 
-        # Apply consolidation steps with different thresholds for intent vs sentiment
-        # Step 1: Semantic similarity merging for intents (moderate threshold)
-        consolidated_intents = self._merge_similar_categories(intent_categories, threshold=self.similarity_threshold)
+        # DISABLE ALL CONSOLIDATION - Keep ALL categories as-is
+        # This preserves every single intent and sentiment category found by the LLM
+        # No merging, no filtering, no consolidation
 
-        # Step 2: Semantic similarity merging for sentiments (lower threshold to preserve emotional nuance)
-        consolidated_sentiments = self._merge_similar_categories(sentiment_categories, threshold=self.sentiment_similarity_threshold)
-
-        # Step 3: Business pattern consolidation for intents only (sentiments should remain granular)
-        final_intents = self._apply_business_consolidation_rules(consolidated_intents)
-
-        logger.info(f"Final result: {len(final_intents)} consolidated intent categories, {len(consolidated_sentiments)} sentiment categories")
+        logger.info("CONSOLIDATION DISABLED: Preserving ALL categories without merging or filtering")
+        logger.info(f"Keeping all {len(intent_categories)} intent categories")
+        logger.info(f"Keeping all {len(sentiment_categories)} sentiment categories")
 
         return {
-            'intent_categories': final_intents,
-            'sentiment_categories': consolidated_sentiments
+            'intent_categories': intent_categories,  # Return raw categories without consolidation
+            'sentiment_categories': sentiment_categories  # Return raw categories without consolidation
         }
 
     def _generate_realistic_examples(self, intent_name: str, indicators: List[str]) -> List[str]:
