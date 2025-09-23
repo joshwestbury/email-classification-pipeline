@@ -23,18 +23,18 @@ class Clusterer:
     def __init__(self, umap_params: Dict[str, Any] = None, hdbscan_params: Dict[str, Any] = None, hierarchical_mode: bool = True):
         # Enhanced UMAP parameters for finer granularity
         self.umap_params = umap_params or {
-            'n_neighbors': 10,  # Reduced from 15 for finer detail
-            'min_dist': 0.05,   # Reduced from 0.1 for tighter clusters
-            'n_components': 30, # Reduced from 50 for better clustering
+            'n_neighbors': 8,   # Further reduced for more granular clusters
+            'min_dist': 0.03,   # Even tighter clusters to preserve sentiment diversity
+            'n_components': 25, # Reduced for better sentiment separation
             'random_state': 42
         }
 
         # Enhanced HDBSCAN parameters for multi-stage clustering
         self.hdbscan_params = hdbscan_params or {
-            'min_cluster_size': 8,  # Broad intent categories
-            'min_samples': 3,
+            'min_cluster_size': 5,  # Smaller clusters to preserve minority sentiments
+            'min_samples': 2,       # Reduced to allow smaller sentiment groups
             'metric': 'euclidean',
-            'cluster_selection_epsilon': 0.3
+            'cluster_selection_epsilon': 0.2  # Tighter epsilon for better separation
         }
 
         self.hierarchical_mode = hierarchical_mode
@@ -53,9 +53,9 @@ class Clusterer:
         """Perform two-stage hierarchical clustering for intent and sentiment."""
         logger.info("Performing hierarchical clustering (Stage 1: Intent categories)")
 
-        # Stage 1: Broad intent clustering with larger min_cluster_size
+        # Stage 1: Intent clustering - slightly larger for stable categories
         stage1_params = self.hdbscan_params.copy()
-        stage1_params['min_cluster_size'] = 8  # Broad intent categories
+        stage1_params['min_cluster_size'] = 6  # Smaller to preserve diverse intents
 
         stage1_clusterer = hdbscan.HDBSCAN(**stage1_params)
         intent_labels = stage1_clusterer.fit_predict(reduced_embeddings)
@@ -75,17 +75,18 @@ class Clusterer:
         hierarchical_info = {}
 
         for intent_label, indices in intent_clusters.items():
-            if intent_label == -1 or len(indices) < 6:  # Skip noise and small clusters
+            if intent_label == -1 or len(indices) < 3:  # Lower threshold to preserve smaller groups
                 continue
 
             # Extract embeddings for this intent cluster
             intent_embeddings = reduced_embeddings[indices]
 
-            # Stage 2: Finer sentiment clustering within intent
+            # Stage 2: Fine-grained sentiment clustering within intent
             stage2_params = {
-                'min_cluster_size': 3,  # Sentiment sub-clusters
-                'min_samples': 2,
-                'metric': 'euclidean'
+                'min_cluster_size': 2,  # Allow very small sentiment clusters
+                'min_samples': 1,       # Single-linkage for minority sentiments
+                'metric': 'euclidean',
+                'cluster_selection_epsilon': 0.15  # Tighter for sentiment preservation
             }
 
             stage2_clusterer = hdbscan.HDBSCAN(**stage2_params)

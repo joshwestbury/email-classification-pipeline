@@ -200,6 +200,8 @@ class LLMAnalyzer:
 
         SENTIMENT DIVERSITY REQUIREMENT: You MUST avoid consolidating different emotional tones into generic categories like "Professional" or "Administrative". Each cluster should reflect the actual emotional state of customers.
 
+        MINORITY SENTIMENT PRESERVATION RULE: If ANY email in this cluster shows clear emotional markers (frustrated, angry, apologetic, urgent, etc.), you MUST use that specific sentiment category even if it's not the majority. Do NOT default to dominant patterns when strong minority sentiments exist.
+
         Cluster Statistics:
         - Cluster ID: {cluster_id}
         - Cluster Size: {cluster_size} incoming customer emails
@@ -209,14 +211,18 @@ class LLMAnalyzer:
         - Dominant Sentiment: {sentiment_analysis.get('dominant_sentiment', 'unknown')}
         - Average Confidence: {sentiment_analysis.get('avg_confidence', 0.0):.2f}
         - Sentiment Distribution: {sentiment_analysis.get('distribution', {})}
+        - High-Confidence Detections: {sentiment_analysis.get('high_confidence_sentiments', [])}
+        - Minority Sentiments (>0.15 confidence): {sentiment_analysis.get('minority_sentiments', [])}
         - Sample Sentiment Results: {sentiment_analysis.get('sample_results', [])}
 
-        MANDATORY SENTIMENT ANALYSIS RULES:
-        - If pre-analysis shows "frustrated" patterns, you MUST categorize as Frustrated sentiment
-        - If pre-analysis shows "cooperative" patterns, you MUST categorize as Cooperative sentiment
-        - If pre-analysis shows "urgent" patterns, you MUST categorize as Urgent sentiment
-        - If pre-analysis shows "apologetic" patterns, you MUST categorize as Apologetic sentiment
-        - Only use "Professional" if there are truly NO emotional indicators whatsoever
+        MANDATORY SENTIMENT ANALYSIS RULES (PRIORITY ORDER):
+        1. If ANY high-confidence minority sentiment exists (frustrated, angry, desperate), use that category
+        2. If multiple minority sentiments exist with confidence >0.15, choose the most emotionally significant
+        3. If pre-analysis shows "frustrated" patterns anywhere, you MUST categorize as Frustrated sentiment
+        4. If pre-analysis shows "cooperative" patterns, you MUST categorize as Cooperative sentiment
+        5. If pre-analysis shows "urgent" patterns, you MUST categorize as Urgent sentiment
+        6. If pre-analysis shows "apologetic" patterns, you MUST categorize as Apologetic sentiment
+        7. Only use "Professional" or "Administrative" if there are truly NO emotional indicators whatsoever
 
         Your task is to:
         1. Identify the SPECIFIC intent/purpose of these customer emails (not generic categories)
@@ -264,17 +270,32 @@ class LLMAnalyzer:
         - Acknowledgment of Receipt (confirming they received communication)
         - Third Party Authorization (involving lawyers, representatives)
 
-        REQUIRED SENTIMENT DETECTION - Match these EXACT categories based on emotional content:
-        - Frustrated: ANY signs of irritation, dissatisfaction, anger, "unacceptable", "ridiculous"
+        REQUIRED SENTIMENT DETECTION - Match these EXACT categories with PRIORITY for emotional content:
+
+        HIGH PRIORITY (Use if ANY indicators present, even as minority):
+        - Frustrated: ANY signs of irritation, dissatisfaction, anger, "unacceptable", "ridiculous", "disappointed"
+        - Desperate: Pleading, severe stress, "please help", financial distress, urgent pleas
+        - Angry: Strong negative emotion, "outrageous", "furious", demanding tone
+
+        MEDIUM PRIORITY (Use if clearly present):
         - Cooperative: Willing to work together, "happy to", "working with you", positive engagement
         - Apologetic: Expressing regret, "sorry", "apologize", taking responsibility
         - Urgent: Time pressure, "urgent", "asap", "immediately", emergency language
         - Confused: Seeking clarification, "don't understand", "unclear", uncertainty
         - Grateful: Appreciative tone, "thank you", thankful for assistance
-        - Desperate: Pleading, severe stress, "please help", financial distress
+
+        LOW PRIORITY (Only if no emotional content exists):
+        - Administrative: Neutral business communication, information exchange
         - Professional: ONLY if completely neutral with no emotional markers detected
 
-        CRITICAL: The pre-analysis sentiment data above shows what was detected by pattern matching. You MUST respect these findings and NOT default to "Professional" when other sentiments are present.
+        SENTIMENT PRIORITY RULE: Always choose the highest priority sentiment category that has ANY evidence in the cluster, even if it represents a minority of emails.
+
+        CRITICAL: The pre-analysis sentiment data above shows what was detected by pattern matching. You MUST:
+        - Prioritize ANY frustrated, angry, or upset sentiment even if it's a minority
+        - Look for high-confidence minority sentiments in the data above
+        - NOT default to "Professional" when ANY emotional markers are present
+        - Preserve sentiment diversity by choosing the most emotionally significant category
+        - Remember that frustrated customers need different handling than professional ones
 
         IMPORTANT GUIDELINES:
         - Avoid generic terms like "Administrative" or "Information Request"

@@ -220,20 +220,81 @@ class SentimentAnalyzer:
             # Analyze sentiment for cluster emails
             sentiment_results = self.analyze_batch(cluster_emails)
 
-            # Calculate cluster sentiment distribution
+            # Calculate cluster sentiment distribution with confidence weighting
             sentiment_dist = {}
+            confidence_weighted_dist = {}
             total_confidence = 0.0
+            high_confidence_sentiments = []
+            minority_sentiments = []
 
             for result in sentiment_results:
                 sentiment = result.sentiment
+                confidence = result.confidence
+
+                # Raw count distribution
                 sentiment_dist[sentiment] = sentiment_dist.get(sentiment, 0) + 1
-                total_confidence += result.confidence
+
+                # Confidence-weighted distribution
+                confidence_weighted_dist[sentiment] = confidence_weighted_dist.get(sentiment, 0.0) + confidence
+
+                total_confidence += confidence
+
+                # Track high-confidence detections (especially emotional ones)
+                if confidence > 0.6 and sentiment in ['frustrated', 'angry', 'desperate', 'urgent', 'apologetic']:
+                    high_confidence_sentiments.append({
+                        'sentiment': sentiment,
+                        'confidence': confidence,
+                        'indicators': result.indicators_found
+                    })
+
+                # Track minority sentiments with reasonable confidence
+                if confidence > 0.15 and sentiment != 'professional':
+                    minority_sentiments.append({
+                        'sentiment': sentiment,
+                        'confidence': confidence,
+                        'count': sentiment_dist[sentiment]
+                    })
+
+            # Determine the most representative sentiment using enhanced logic
+            dominant_by_count = max(sentiment_dist.items(), key=lambda x: x[1])[0] if sentiment_dist else 'professional'
+            dominant_by_confidence = max(confidence_weighted_dist.items(), key=lambda x: x[1])[0] if confidence_weighted_dist else 'professional'
+
+            # Priority-based sentiment selection
+            selected_sentiment = dominant_by_count
+
+            # Override with high-confidence emotional sentiments (even if minority)
+            if high_confidence_sentiments:
+                # Sort by confidence and choose the highest
+                best_emotional = max(high_confidence_sentiments, key=lambda x: x['confidence'])
+                selected_sentiment = best_emotional['sentiment']
+                logger.info(f"Cluster {cluster_id}: Overriding with high-confidence minority sentiment '{selected_sentiment}' (confidence: {best_emotional['confidence']:.2f})")
+
+            # If no high-confidence emotional, but strong minority sentiments exist
+            elif minority_sentiments:
+                # Filter for significant minority sentiments (>15% confidence)
+                significant_minorities = [s for s in minority_sentiments if s['confidence'] > 0.25]
+                if significant_minorities:
+                    # Prioritize emotional sentiments over neutral ones
+                    emotional_priorities = ['frustrated', 'angry', 'desperate', 'urgent', 'apologetic', 'cooperative']
+                    for priority_sentiment in emotional_priorities:
+                        for minority in significant_minorities:
+                            if minority['sentiment'] == priority_sentiment:
+                                selected_sentiment = priority_sentiment
+                                logger.info(f"Cluster {cluster_id}: Selected priority minority sentiment '{selected_sentiment}' over dominant '{dominant_by_count}'")
+                                break
+                        if selected_sentiment == priority_sentiment:
+                            break
 
             # Add sentiment analysis to cluster info
             cluster_info['sentiment_analysis'] = {
                 'distribution': sentiment_dist,
-                'dominant_sentiment': max(sentiment_dist.items(), key=lambda x: x[1])[0] if sentiment_dist else 'professional',
+                'confidence_weighted_distribution': confidence_weighted_dist,
+                'dominant_sentiment': selected_sentiment,
+                'dominant_by_count': dominant_by_count,
+                'dominant_by_confidence': dominant_by_confidence,
                 'avg_confidence': total_confidence / len(sentiment_results) if sentiment_results else 0.0,
+                'high_confidence_sentiments': high_confidence_sentiments,
+                'minority_sentiments': minority_sentiments,
                 'sample_results': [
                     {
                         'sentiment': r.sentiment,
