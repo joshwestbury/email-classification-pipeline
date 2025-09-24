@@ -279,14 +279,39 @@ class TaxonomyPipeline:
     def _generate_summary(self) -> Dict[str, Any]:
         """Generate a summary of the pipeline run."""
 
-        # Get email counts from processed data
+        # Get email counts from processed data with robust null-checking
         processed_data = self.state.get('processed_data', {})
         all_emails = processed_data.get('emails', [])
+
+        # Ensure all_emails is a list, not None
+        if all_emails is None:
+            all_emails = []
+
         total_emails = len(all_emails)
 
-        # Count incoming vs outgoing emails after classification
-        incoming_emails = [e for e in all_emails if e.get('direction') == 'incoming']
-        outgoing_emails = [e for e in all_emails if e.get('direction') == 'outgoing']
+        # Count incoming vs outgoing emails after classification with safe iteration
+        try:
+            incoming_emails = [e for e in all_emails if e and e.get('direction') == 'incoming']
+            outgoing_emails = [e for e in all_emails if e and e.get('direction') == 'outgoing']
+        except (TypeError, AttributeError) as e:
+            self.logger.warning(f"Error processing email direction classification: {e}")
+            incoming_emails = []
+            outgoing_emails = []
+
+        # Safely extract cluster and taxonomy information
+        try:
+            clusters_data = self.state.get('clusters', {})
+            cluster_stats = clusters_data.get('cluster_stats', {}) if clusters_data else {}
+            clusters_found = len(cluster_stats) if cluster_stats else 0
+        except (TypeError, AttributeError):
+            clusters_found = 0
+
+        try:
+            taxonomy_data = self.state.get('taxonomy', {})
+            curation_stats = taxonomy_data.get('curation_stats', {}) if taxonomy_data else {}
+            categories_proposed = curation_stats.get('final_intent_categories', 0) if curation_stats else 0
+        except (TypeError, AttributeError):
+            categories_proposed = 0
 
         summary = {
             'dataset': self.config.dataset_name,
@@ -296,8 +321,8 @@ class TaxonomyPipeline:
                 'incoming_emails': len(incoming_emails),
                 'outgoing_emails': len(outgoing_emails),
                 'classification_ratio': f"{len(incoming_emails)}/{len(outgoing_emails)}" if outgoing_emails else f"{len(incoming_emails)}/0",
-                'clusters_found': len(self.state.get('clusters', {}).get('cluster_stats', {})),
-                'categories_proposed': self.state.get('taxonomy', {}).get('curation_stats', {}).get('final_intent_categories', 0)
+                'clusters_found': clusters_found,
+                'categories_proposed': categories_proposed
             },
             'output_files': [
                 str(self.config.get_output_path(f)) for f in [
@@ -313,10 +338,15 @@ class TaxonomyPipeline:
             ]
         }
 
-        # Add prompt generation details if available
-        if 'system_prompt' in self.state:
-            summary['results']['prompt_generated'] = True
-            summary['results']['prompt_metadata'] = self.state['system_prompt']['metadata']
+        # Add prompt generation details if available with safe access
+        if 'system_prompt' in self.state and self.state['system_prompt']:
+            try:
+                summary['results']['prompt_generated'] = True
+                prompt_data = self.state['system_prompt']
+                summary['results']['prompt_metadata'] = prompt_data.get('metadata', {}) if prompt_data else {}
+            except (TypeError, AttributeError, KeyError) as e:
+                self.logger.warning(f"Error accessing system prompt metadata: {e}")
+                summary['results']['prompt_generated'] = False
 
         # Save summary
         summary_path = self.config.get_output_path('pipeline_summary.json')
