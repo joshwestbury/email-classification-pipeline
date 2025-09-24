@@ -27,16 +27,16 @@ class PipelineConfig:
     embedding_model: str = "all-mpnet-base-v2"
     include_thread_context: bool = True
 
-    # Clustering parameters
-    umap_n_neighbors: int = 15
-    umap_min_dist: float = 0.1
-    umap_n_components: int = 50
-    hdbscan_min_cluster_size: int = 5
-    hdbscan_min_samples: int = 3
+    # Clustering parameters - Granular settings for more specific categories
+    umap_n_neighbors: int = 8        # Reduced from 15 for tighter neighborhoods
+    umap_min_dist: float = 0.01      # Reduced from 0.1 for better separation
+    umap_n_components: int = 35      # Reduced from 50 to avoid bottleneck
+    hdbscan_min_cluster_size: int = 3  # Reduced from 5 for smaller clusters
+    hdbscan_min_samples: int = 1     # Reduced from 3 for lower noise threshold
 
     # LLM analysis
     openai_model: str = "gpt-4o"
-    analyze_top_clusters: int = 500  # Set high limit to analyze ALL clusters
+    analyze_top_clusters: int = 1000  # Analyze ALL clusters
 
     # Output settings
     output_dir: str = "outputs"
@@ -48,6 +48,21 @@ class PipelineConfig:
         with open(filepath, 'r') as f:
             config_dict = yaml.safe_load(f)
         return cls(**config_dict)
+
+    @classmethod
+    def load_granular_config(cls, input_file: str, dataset_name: str) -> 'PipelineConfig':
+        """Load granular configuration optimized for specific categories."""
+        granular_config_path = Path(__file__).parent / "granular_config.yaml"
+
+        if granular_config_path.exists():
+            # Load from granular config file and override input/dataset
+            config = cls.from_yaml(str(granular_config_path))
+            config.input_file = input_file
+            config.dataset_name = dataset_name
+            return config
+        else:
+            # Fallback to creating config with granular defaults (already set in class)
+            return cls(input_file=input_file, dataset_name=dataset_name)
 
     def to_yaml(self, filepath: str) -> None:
         """Save configuration to YAML file."""

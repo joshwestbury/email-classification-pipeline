@@ -64,7 +64,7 @@ def run_pipeline_from_config(config_path: str, steps: str | None = None) -> None
 
 
 def run_pipeline_quick(input_file: str, dataset_name: str | None = None) -> None:
-    """Run the pipeline with minimal configuration."""
+    """Run the pipeline with granular configuration for specific categories."""
     if not Path(input_file).exists():
         print(f"Error: Input file {input_file} not found.")
         sys.exit(1)
@@ -74,9 +74,13 @@ def run_pipeline_quick(input_file: str, dataset_name: str | None = None) -> None
     if dataset_name is None:
         dataset_name = "temp"  # Will be replaced by auto-numbering
 
-    config = ConfigManager.create_default_config(
-        dataset_name, input_file, auto_number=auto_number
-    )
+    # Use granular configuration by default for better category specificity
+    config = PipelineConfig.load_granular_config(input_file, dataset_name)
+
+    # Apply auto-numbering if needed
+    if auto_number:
+        config = ConfigManager.apply_auto_numbering(config)
+
     pipeline = TaxonomyPipeline(config)
 
     results = pipeline.run_full_pipeline()
