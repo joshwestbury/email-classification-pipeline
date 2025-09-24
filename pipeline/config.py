@@ -38,6 +38,14 @@ class PipelineConfig:
     openai_model: str = "gpt-4o"
     analyze_top_clusters: int = 1000  # Analyze ALL clusters
 
+    # System Prompt Generation
+    generate_prompt: bool = True
+    prompt_include_examples: bool = True
+    prompt_confidence_scoring: bool = True
+    prompt_entity_extraction: bool = True
+    prompt_chain_of_thought: bool = True
+    prompt_max_examples: int = 3
+
     # Output settings
     output_dir: str = "outputs"
     save_intermediate: bool = True

@@ -17,6 +17,7 @@ from .embedder import Embedder
 from .clusterer import Clusterer
 from .analyzer import LLMAnalyzer
 from .curator import TaxonomyCurator
+from .prompt_generator import PromptGenerator
 
 
 class TaxonomyPipeline:
@@ -97,6 +98,12 @@ class TaxonomyPipeline:
         self.logger.info("Step 6: Curating final taxonomy...")
         curation_results = self._run_taxonomy_curation()
         self.state['taxonomy'] = curation_results
+
+        # Step 7: System Prompt Generation
+        if self.config.generate_prompt:
+            self.logger.info("Step 7: Generating system prompt from taxonomy...")
+            prompt_results = self._run_prompt_generation()
+            self.state['system_prompt'] = prompt_results
 
         self.logger.info("Pipeline completed successfully!")
         summary = self._generate_summary()
@@ -239,6 +246,36 @@ class TaxonomyPipeline:
 
         return curation_results
 
+    def _run_prompt_generation(self) -> Dict[str, Any]:
+        """Run system prompt generation step."""
+        # Configure prompt generator
+        prompt_config = {
+            'include_examples': self.config.prompt_include_examples if hasattr(self.config, 'prompt_include_examples') else True,
+            'include_confidence_scoring': self.config.prompt_confidence_scoring if hasattr(self.config, 'prompt_confidence_scoring') else True,
+            'include_entity_extraction': self.config.prompt_entity_extraction if hasattr(self.config, 'prompt_entity_extraction') else True,
+            'include_chain_of_thought': self.config.prompt_chain_of_thought if hasattr(self.config, 'prompt_chain_of_thought') else True,
+            'max_examples_per_category': self.config.prompt_max_examples if hasattr(self.config, 'prompt_max_examples') else 3
+        }
+
+        generator = PromptGenerator(config=prompt_config)
+
+        # Get taxonomy file path
+        taxonomy_path = self.config.get_output_path('taxonomy.yaml')
+
+        # Generate system prompt
+        output_path = self.config.get_output_path('system_prompt')
+        prompt_results = generator.generate(taxonomy_path, output_path)
+
+        self.logger.info(f"System prompt generated and saved to {output_path}")
+
+        # Also save JSON schema separately for validation
+        schema_path = self.config.get_output_path('response_schema.json')
+        with open(schema_path, 'w') as f:
+            json.dump(prompt_results['json_schema'], f, indent=2)
+        self.logger.info(f"Response schema saved to {schema_path}")
+
+        return prompt_results
+
     def _generate_summary(self) -> Dict[str, Any]:
         """Generate a summary of the pipeline run."""
 
@@ -268,10 +305,18 @@ class TaxonomyPipeline:
                     'anonymized_emails.json',
                     'embeddings',
                     'cluster_results.json',
-                    'taxonomy_analysis.json'
+                    'taxonomy_analysis.json',
+                    'taxonomy.yaml',
+                    'system_prompt.txt',
+                    'response_schema.json'
                 ]
             ]
         }
+
+        # Add prompt generation details if available
+        if 'system_prompt' in self.state:
+            summary['results']['prompt_generated'] = True
+            summary['results']['prompt_metadata'] = self.state['system_prompt']['metadata']
 
         # Save summary
         summary_path = self.config.get_output_path('pipeline_summary.json')
