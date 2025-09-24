@@ -1434,9 +1434,7 @@ class DataProcessor:
 
                 # Check for very short content (likely signatures or fragments)
                 if (len(content.strip()) < 30 or
-                    any(pattern in content for pattern in business_patterns) or
-                    '@litera.com' in content or
-                    'litera' in content.lower()):
+                    any(pattern in content for pattern in business_patterns)):
                     email['direction'] = 'outgoing'
                     logger.debug(f"Reclassified short/business email as outgoing: {content[:50]}...")
 

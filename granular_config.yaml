@@ -1,0 +1,37 @@
+# Email Taxonomy Discovery Pipeline Configuration - Granular Categories
+#
+# Optimized for more fine-grained semantic categories
+
+# Dataset identification
+dataset_name: "granular_test"
+input_file: "./source_data/litera_raw_emails.json"
+
+# Processing options
+clean_html: true
+anonymize_pii: true
+separate_threads: true
+
+# Embedding configuration
+embedding_model: "all-mpnet-base-v2"  # Keep current high-quality model
+include_thread_context: true
+
+# Clustering parameters - ADJUSTED FOR MORE GRANULAR CATEGORIES
+umap_n_neighbors: 8          # Reduced from 15 - creates tighter local neighborhoods
+umap_min_dist: 0.01          # Reduced from 0.1 - forces more separation between clusters
+umap_n_components: 35        # Reduced from 50 - less dimensionality bottleneck
+hdbscan_min_cluster_size: 3  # Reduced from 5 - allows smaller, more specific clusters
+hdbscan_min_samples: 1       # Reduced from 3 - reduces noise threshold
+
+# LLM analysis settings - ANALYZE ALL CLUSTERS
+openai_model: "gpt-4o"
+analyze_top_clusters: 1000   # Analyze ALL clusters (set high to ensure we get them all)
+
+# Output settings
+output_dir: "outputs"
+save_intermediate: true
+
+# Notes:
+# - These parameters are optimized for more granular, fine-grained categories
+# - All clusters will be analyzed by the LLM regardless of size
+# - Categories will remain flat (no hierarchical structure)
+# - Expect 2-3x more clusters than the previous configuration

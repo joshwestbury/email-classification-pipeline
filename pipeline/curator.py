@@ -739,8 +739,10 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
             if sentiment_name not in sentiment_categories:
                 sentiment_categories[sentiment_name] = {
                     'definition': analysis.get('sentiment_definition', ''),
+                    'decision_rules': [],  # Add decision_rules field
                     'emotional_markers': [],
                     'sample_indicators': analysis.get('sample_indicators', []),
+                    'business_relevance': analysis.get('business_relevance', ''),  # Add business_relevance
                     'clusters': [],
                     'total_emails': 0
                 }
@@ -749,6 +751,15 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
             emotional_markers = analysis.get('emotional_markers', [])
             if emotional_markers:
                 sentiment_categories[sentiment_name]['emotional_markers'].extend(emotional_markers)
+
+            # Extract sentiment-specific decision rules from the LLM analysis
+            # The LLM provides decision_rules that cover both intent and sentiment
+            all_decision_rules = analysis.get('decision_rules', [])
+            sentiment_rules = [rule for rule in all_decision_rules if 'sentiment' in rule.lower() or sentiment_name.lower() in rule.lower()]
+            if sentiment_rules:
+                for rule in sentiment_rules:
+                    if rule not in sentiment_categories[sentiment_name]['decision_rules']:
+                        sentiment_categories[sentiment_name]['decision_rules'].append(rule)
 
             sentiment_categories[sentiment_name]['clusters'].append(cluster_id)
             sentiment_categories[sentiment_name]['total_emails'] += analysis.get('cluster_size', 0)
@@ -971,20 +982,24 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
                 f"  {snake_case_name}:",
                 f'    display_name: "{sentiment_name}"',
                 f'    description: "{sentiment_data["definition"]}"',
-                f'    business_value: "{self._get_business_value_for_sentiment(sentiment_name)}"',
+                f'    business_value: "{sentiment_data.get("business_relevance", "Track customer sentiment patterns")}"',
                 f'    coverage: "{coverage_pct:.1f}%"  # {sentiment_data["total_emails"]} emails',
                 "    decision_rules:"
             ])
 
-            for rule in self._generate_sentiment_decision_rules(sentiment_name):
+            # Use LLM-derived decision rules, not hardcoded ones
+            for rule in sentiment_data.get('decision_rules', []):
                 yaml_lines.append(f'      - "{rule}"')
 
             yaml_lines.append("    key_indicators:")
-            for indicator in self._generate_sentiment_indicators(sentiment_name):
+            # Use LLM-derived indicators
+            for indicator in sentiment_data.get('sample_indicators', []):
                 yaml_lines.append(f'      - "{indicator}"')
 
             yaml_lines.append("    examples:")
-            for example in self._generate_sentiment_examples(sentiment_name):
+            # Generate examples from LLM indicators (similar to intent categories)
+            examples = self._generate_clean_examples(sentiment_name, sentiment_data.get('sample_indicators', []))
+            for example in examples:
                 yaml_lines.append(f'      - "{example}"')
 
             yaml_lines.append("")
@@ -1114,8 +1129,8 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
             structured['sentiment_categories'][sentiment_name] = {
                 'description': sentiment_data['definition'],
                 'coverage': coverage_pct,
-                'decision_rules': self._generate_sentiment_decision_rules(sentiment_name),
-                'examples': self._generate_sentiment_examples(sentiment_name)
+                'decision_rules': sentiment_data.get('decision_rules', []),  # Use LLM data
+                'examples': self._generate_clean_examples(sentiment_name, sentiment_data.get('sample_indicators', []))  # Use LLM data
             }
 
         return structured

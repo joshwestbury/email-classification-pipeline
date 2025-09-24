@@ -4,7 +4,47 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This project enhances a custom **Collection Notes** module in NetSuite by introducing AI-powered sentiment and intent analysis for inbound customer emails. The goal is to automatically analyze emails, categorize their sentiment and intent into a standardized taxonomy, extract key entities (dates, amounts, invoice IDs), and generate structured Collection Note records in NetSuite.
+We currently maintain a custom NetSuite module called "Collection Notes." This module is built on a custom record type that allows users to document and track collection activities, such as late or missed payments. It also stores email correspondence between NetSuite collection agents and customers, ensuring that all collection-related interactions are centralized and accessible.
+
+### Project Goal
+
+The goal of this project is to enhance the Collection Notes module with AI-powered classification and summarization. Specifically, we want to automatically analyze incoming customer emails in NetSuite, classify them by Intent and Sentiment, and generate actionable notes or recommendations for the collections team.
+
+This automation will likely be implemented via a User Event Script that is triggered whenever an inbound email is received. The script will send the email content, along with a detailed system prompt, to a Large Language Model (LLM). The LLM will classify the email and return structured metadata (intent and sentiment), a concise summary, and suggested next steps for the agent.
+
+### Classification Dimensions
+
+**Intent**
+
+The intent represents the underlying purpose of the customer's email — essentially, what they want to achieve. Common intent categories include:
+• Request Action – asking the recipient to perform a specific task.
+• Share Information – providing updates, reports, or FYI content.
+• Seek Information – asking questions or requesting clarification.
+• Build Relationship – expressing gratitude, maintaining rapport, or networking.
+• Persuade/Influence – attempting to convince the recipient of a viewpoint or proposed action.
+• Schedule/Coordinate – arranging meetings, calls, or aligning on timing.
+
+**Sentiment**
+
+The sentiment represents the emotional tone conveyed in the customer's message — in other words, how they feel. Sentiment is measured along multiple dimensions:
+• Polarity – positive, negative, or neutral.
+• Intensity – the strength of the expressed emotion (mild, moderate, strong).
+• Specific Emotions – such as frustrated, urgent, apologetic, grateful, enthusiastic, or concerned.
+
+### LLM System Prompt
+
+The system prompt will contain:
+• Definitions and descriptions of each intent and sentiment category.
+• Examples of emails mapped to those categories.
+• Instructions for how the LLM should classify emails consistently.
+
+In addition to classification, the LLM will be instructed to:
+• Generate a concise summary of the email.
+• Recommend a course of action or next step for the collection agent.
+
+### Prerequisite: Defining Taxonomy and System Prompt
+
+Before integrating this functionality into NetSuite, we need to finalize the taxonomy of intent and sentiment categories and develop the detailed system prompt. To do this, we are building a classification pipeline that processes real-world emails and generates candidate categories.
 
 ### Python Best Practices
 
@@ -74,6 +114,25 @@ The project now includes a modular pipeline system for processing multiple email
 - **`pipeline_config_template.yaml`** — Configuration template for new datasets
 - **`PIPELINE_README.md`** — Usage documentation and examples
 
+### Classification Pipeline Overview
+
+The pipeline processes raw email data to derive meaningful taxonomies. Its components and workflow are as follows:
+
+1. **Input**: Ingests a raw JSON file of emails.
+2. **DataProcessor**: Normalizes fields, removes HTML formatting, trims quoted replies and signatures, and (optionally) adds limited thread context.
+3. **Anonymizer**: Applies regex-based rules to detect and replace personally identifiable information (PII) such as emails, phone numbers, IDs, and names. A stable replacement map ensures consistency across documents.
+4. **Embedder**: Uses sentence-transformers (default: all-MiniLM-L6-v2) to generate embeddings. Each message is represented as a vector derived from its subject line and body (length-limited).
+5. **Clusterer**: Groups similar messages using UMAP for dimensionality reduction and HDBSCAN for density-based clustering. Produces cluster IDs while identifying noise/outliers.
+6. **Analyzer**: Selects representative samples from each cluster and calls an LLM to:
+   • Summarize the cluster's overall theme.
+   • Propose preliminary intent and sentiment labels.
+   • Provide examples and rationales.
+7. **Curator**: Consolidates overlapping categories, standardizes names/definitions, and produces a draft taxonomy with examples. Outputs include:
+   • Taxonomy of intents and sentiments.
+   • Cluster summaries.
+   • Per-message tentative labels.
+8. **Pipeline/Config**: Centralizes configuration (UMAP/HDBSCAN parameters, model settings, output paths). Exports results in JSON, CSV, and YAML for human review.
+
 ### Using the Pipeline
 
 **Quick Start:**
@@ -87,13 +146,6 @@ python run_pipeline.py --input new_emails.json --dataset-name customer_q4
 # Use custom configuration
 python run_pipeline.py --config my_dataset.yaml
 ```
-
-**Pipeline Steps:**
-1. Data processing (HTML cleaning, thread separation)
-2. PII anonymization (emails, phones, addresses, names)
-3. Embedding generation (sentence transformers)
-4. Clustering analysis (UMAP + HDBSCAN)
-5. LLM category proposal (GPT-4o analysis)
 
 Each dataset gets organized outputs in `outputs/{dataset_name}/` for easy management.
 
@@ -170,6 +222,12 @@ When working on this project:
 4. Maintain version control for taxonomy files and prompts
 5. Document model performance metrics and validation results
 6. Prepare deliverables for eventual NetSuite User Event integration
+
+## Current Status
+
+• The pipeline is under active development.
+• Our immediate objective is to produce an accurate, meaningful, and actionable taxonomy of intent and sentiment categories.
+• Once the taxonomy and system prompt are finalized, we will integrate the LLM classification and note-generation process into the NetSuite Collection Notes module.
 
 ### Pipeline Usage for New Datasets
 
