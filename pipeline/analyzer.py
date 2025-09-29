@@ -198,9 +198,9 @@ class LLMAnalyzer:
 
         CRITICAL: Create SPECIFIC, GRANULAR categories that capture distinct customer communication patterns.
 
-        SENTIMENT DIVERSITY REQUIREMENT: You MUST avoid consolidating different emotional tones into generic categories like "Professional" or "Administrative". Each cluster should reflect the actual emotional state of customers.
+        ## CONTEXT FOR ANALYSIS
 
-        MINORITY SENTIMENT PRESERVATION RULE: If ANY email in this cluster shows clear emotional markers (frustrated, angry, apologetic, urgent, etc.), you MUST use that specific sentiment category even if it's not the majority. Do NOT default to dominant patterns when strong minority sentiments exist.
+        You are analyzing a cluster of semantically similar customer emails from a collections context. Your goal is to discover the natural categories that emerge from the data itself, not to fit emails into predetermined boxes.
 
         Cluster Statistics:
         - Cluster ID: {cluster_id}
@@ -215,21 +215,15 @@ class LLMAnalyzer:
         - Minority Sentiments (>0.15 confidence): {sentiment_analysis.get('minority_sentiments', [])}
         - Sample Sentiment Results: {sentiment_analysis.get('sample_results', [])}
 
-        MANDATORY SENTIMENT ANALYSIS RULES (PRIORITY ORDER):
-        1. If ANY high-confidence minority sentiment exists (frustrated, angry, desperate), use that category
-        2. If multiple minority sentiments exist with confidence >0.15, choose the most emotionally significant
-        3. If pre-analysis shows "frustrated" patterns anywhere, you MUST categorize as Frustrated sentiment
-        4. If pre-analysis shows "cooperative" patterns, you MUST categorize as Cooperative sentiment
-        5. If pre-analysis shows "urgent" patterns, you MUST categorize as Urgent sentiment
-        6. If pre-analysis shows "apologetic" patterns, you MUST categorize as Apologetic sentiment
-        7. Only use "Professional" or "Administrative" if there are truly NO emotional indicators whatsoever
+        Pattern Analysis Notes:
+        The pre-analysis data above shows automated pattern detection results. Use this as one input among many, but let the actual email content guide your categorization. The goal is authentic category discovery based on what customers are actually communicating.
 
         Your task is to:
-        1. Identify the SPECIFIC intent/purpose of these customer emails (not generic categories)
-        2. Determine the PRECISE emotional tone - RESPECT the pre-analysis sentiment indicators
-        3. Create distinct, actionable categories for collections processing
-        4. Suggest precise decision rules with specific indicators
-        5. PRESERVE sentiment diversity - do not default to "Professional" unless truly neutral
+        1. Identify the natural intent that emerges from these customer emails
+        2. Determine the authentic emotional tone present in the communications
+        3. Create distinct, meaningful categories useful for collections operations
+        4. Suggest clear decision rules based on actual patterns observed
+        5. Focus on operational value rather than forced categorization
 
         Sample CUSTOMER emails from the cluster:
         {samples_text}
@@ -258,44 +252,47 @@ class LLMAnalyzer:
         - Do not use trailing commas
         - Validate that your response is parseable JSON before sending
 
-        Create SPECIFIC intent categories such as:
-        - Payment Status Inquiry (asking about specific payment status)
-        - Payment Promise with Timeline (committing to pay by specific date)
-        - Hardship Communication (explaining financial difficulties)
-        - Dispute Resolution Request (challenging charges or seeking resolution)
-        - Invoice Documentation Request (asking for copies, receipts, W9s)
-        - Account Information Update (changing contact details, banking info)
-        - Payment Method Inquiry (asking about payment options, procedures)
-        - Settlement Negotiation (proposing payment arrangements)
-        - Acknowledgment of Receipt (confirming they received communication)
-        - Third Party Authorization (involving lawyers, representatives)
+        ## UNDERSTANDING INTENT AND SENTIMENT
 
-        REQUIRED SENTIMENT DETECTION - Match these EXACT categories with PRIORITY for emotional content:
+        **Intent Definition**: The underlying purpose of the customer's email - what they want to achieve. This represents the ACTION or OUTCOME the customer is seeking. Intent is about the "what" and "why" of their communication. Common patterns include:
+        - Requesting action (asking you to do something specific)
+        - Sharing information (providing updates, reports, or FYI content)
+        - Seeking information (asking questions or requesting clarification)
+        - Building relationship (maintaining rapport, expressing gratitude)
+        - Persuading/Influencing (convincing you of a viewpoint)
+        - Scheduling/Coordinating (arranging timing or logistics)
 
-        HIGH PRIORITY (Use if ANY indicators present, even as minority):
-        - Frustrated: ANY signs of irritation, dissatisfaction, anger, "unacceptable", "ridiculous", "disappointed"
-        - Desperate: Pleading, severe stress, "please help", financial distress, urgent pleas
-        - Angry: Strong negative emotion, "outrageous", "furious", demanding tone
+        **Sentiment Definition**: The emotional tone conveyed in the customer's message - how they feel. This represents their EMOTIONAL STATE and COMMUNICATION STYLE. Sentiment captures:
+        - Polarity (positive, negative, or neutral emotional direction)
+        - Intensity (mild, moderate, or strong emotional expression)
+        - Specific emotional states (frustrated, grateful, apologetic, confused, urgent, cooperative, etc.)
 
-        MEDIUM PRIORITY (Use if clearly present):
-        - Cooperative: Willing to work together, "happy to", "working with you", positive engagement
-        - Apologetic: Expressing regret, "sorry", "apologize", taking responsibility
-        - Urgent: Time pressure, "urgent", "asap", "immediately", emergency language
-        - Confused: Seeking clarification, "don't understand", "unclear", uncertainty
-        - Grateful: Appreciative tone, "thank you", thankful for assistance
+        ## YOUR TASK: ORGANIC CATEGORY DISCOVERY
 
-        LOW PRIORITY (Only if no emotional content exists):
-        - Administrative: Neutral business communication, information exchange
-        - Professional: ONLY if completely neutral with no emotional markers detected
+        Analyze this cluster of similar emails to identify:
 
-        SENTIMENT PRIORITY RULE: Always choose the highest priority sentiment category that has ANY evidence in the cluster, even if it represents a minority of emails.
+        1. **Natural Intent Category**: What specific intent emerges from these emails? Name it based on what customers are actually trying to accomplish. Don't force it into predefined categories - let the data speak.
 
-        CRITICAL: The pre-analysis sentiment data above shows what was detected by pattern matching. You MUST:
-        - Prioritize ANY frustrated, angry, or upset sentiment even if it's a minority
-        - Look for high-confidence minority sentiments in the data above
-        - NOT default to "Professional" when ANY emotional markers are present
-        - Preserve sentiment diversity by choosing the most emotionally significant category
-        - Remember that frustrated customers need different handling than professional ones
+        2. **Natural Sentiment Category**: What emotional tone characterizes these emails? Name it based on the actual emotional content you observe. The sentiment should reflect genuine emotional patterns, not generic labels.
+
+        3. **Business Value**: How does identifying this specific intent/sentiment combination help collections operations?
+
+        ## ANALYSIS GUIDELINES
+
+        - Create category names that are DESCRIPTIVE and SPECIFIC to what you observe
+        - Don't default to generic terms like "Professional" or "Administrative" unless truly warranted
+        - If emails show mixed sentiments, choose the most operationally significant one
+        - Consider minority emotional indicators if they require different business handling
+        - Intent and sentiment categories should emerge naturally from the email content
+        - Category names should be 1-3 words, clear and actionable
+
+        ## SENTIMENT ANALYSIS CONSIDERATIONS
+
+        The pre-analysis sentiment data above shows pattern-based detection. Consider:
+        - High-confidence minority sentiments may be more significant than dominant patterns
+        - Frustrated/angry customers need different handling even if they're a minority
+        - True emotional neutrality is rare - look for subtle emotional indicators
+        - Business communications can still carry emotional undertones
 
         IMPORTANT GUIDELINES:
         - Avoid generic terms like "Administrative" or "Information Request"

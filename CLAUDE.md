@@ -73,7 +73,6 @@ Before integrating this functionality into NetSuite, we need to finalize the tax
 **Final Taxonomy**:
 - **3 Intent Categories**: Payment Inquiry, Invoice Management, Information Request
 - **4 Sentiment Categories**: Cooperative, Administrative, Informational, Frustrated
-- **Coverage**: 52.3% of emails from analyzed clusters
 - **Business Value**: Clear actionable categories for NetSuite Collection Notes
 
 **Deliverables**:
@@ -125,12 +124,12 @@ The pipeline processes raw email data to derive meaningful taxonomies. Its compo
 5. **Clusterer**: Groups similar messages using UMAP for dimensionality reduction and HDBSCAN for density-based clustering. Produces cluster IDs while identifying noise/outliers.
 6. **Analyzer**: Selects representative samples from each cluster and calls an LLM to:
    • Summarize the cluster's overall theme.
-   • Propose preliminary intent and sentiment labels.
+   • Propose preliminary intent and sentiment labels organically from email data.
    • Provide examples and rationales.
-7. **Curator**: Consolidates overlapping categories, standardizes names/definitions, and produces a draft taxonomy with examples. Outputs include:
-   • Taxonomy of intents and sentiments.
-   • Cluster summaries.
-   • Per-message tentative labels.
+7. **Curator**: Performs two-stage taxonomy refinement:
+   • **Stage 1**: Extract granular taxonomy from LLM analysis (typically 30-40 categories)
+   • **Stage 2**: Apply aggressive LLM-based consolidation to reduce to 3-5 intent and 3-4 sentiment categories
+   • Generate final taxonomy, labeling guide, and production system prompt
 8. **Pipeline/Config**: Centralizes configuration (UMAP/HDBSCAN parameters, model settings, output paths). Exports results in JSON, CSV, and YAML for human review.
 
 ### Using the Pipeline
@@ -163,8 +162,6 @@ Each dataset gets organized outputs in `outputs/{dataset_name}/` for easy manage
 - **Administrative** — Neutral, business-focused communication
 - **Informational** — Seeking or providing factual information
 - **Frustrated** — Expressing dissatisfaction or impatience
-
-**Coverage**: 52.3% of emails from analyzed clusters (367 out of 703 incoming emails)
 
 *See `taxonomy.yaml` and `taxonomy_labeling_guide.md` for detailed definitions and examples.*
 
@@ -204,12 +201,15 @@ The classifier will output structured JSON containing:
 When using the pipeline with new datasets, outputs are organized in:
 ```
 outputs/{dataset_name}/
-├── processed_emails.json     # Cleaned and structured
-├── anonymized_emails.json    # PII-removed dataset
-├── embeddings/              # Vector representations
-├── cluster_results.json     # Clustering analysis
-├── taxonomy_analysis.json   # LLM-proposed categories
-└── pipeline_summary.json    # Run summary and metrics
+├── processed_emails.json      # Cleaned and structured email data
+├── anonymized_emails.json     # PII-removed dataset
+├── embeddings/                # Vector representations
+├── cluster_results.json       # Clustering analysis results
+├── taxonomy_analysis.json     # Granular LLM-proposed categories (30-40 categories)
+├── taxonomy.yaml              # Final consolidated taxonomy (3-5 intents, 3-4 sentiments)
+├── taxonomy_labeling_guide.md # Human-readable classification guide
+├── system_prompt.txt          # Production-ready NetSuite classification prompt
+└── pipeline_summary.json     # Run summary and metrics
 ```
 
 ## Development Workflow
@@ -225,9 +225,13 @@ When working on this project:
 
 ## Current Status
 
-• The pipeline is under active development.
-• Our immediate objective is to produce an accurate, meaningful, and actionable taxonomy of intent and sentiment categories.
-• Once the taxonomy and system prompt are finalized, we will integrate the LLM classification and note-generation process into the NetSuite Collection Notes module.
+• The pipeline is **production-ready** with automated organic discovery and LLM consolidation.
+• The system generates complete taxonomies from raw email data with minimal human intervention.
+• Key features implemented:
+  - Organic category discovery from email clusters (no predefined categories)
+  - Aggressive LLM consolidation to business-focused taxonomies
+  - Production system prompt generation for NetSuite integration
+• Ready for Phase 2: Classifier validation and NetSuite integration.
 
 ### Pipeline Usage for New Datasets
 

@@ -13,14 +13,47 @@ import logging
 import re
 from sentence_transformers import SentenceTransformer
 import numpy as np
+import os
+from openai import OpenAI
+from dotenv import load_dotenv
+from pydantic import BaseModel, Field
+from tenacity import retry, stop_after_attempt, wait_exponential
+
+# Load environment variables
+load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+
+class ConsolidatedCategory(BaseModel):
+    """Pydantic model for consolidated taxonomy category."""
+    name: str = Field(..., min_length=1, max_length=100, description="Clear, specific category name")
+    definition: str = Field(..., min_length=20, max_length=500, description="Precise definition of the category")
+    business_value: str = Field(..., min_length=10, max_length=300, description="Business value for collections operations")
+    merged_categories: List[str] = Field(..., min_items=1, description="List of original categories merged into this one")
+    decision_rules: List[str] = Field(..., min_items=1, max_items=5, description="Clear decision rules for classification")
+    key_indicators: List[str] = Field(..., min_items=1, max_items=5, description="Key phrases or indicators")
+
+
+class ConsolidatedTaxonomy(BaseModel):
+    """Pydantic model for consolidated taxonomy response."""
+    intent_categories: List[ConsolidatedCategory] = Field(..., min_items=3, max_items=5, description="EXACTLY 3-5 distinct intent categories")
+    sentiment_categories: List[ConsolidatedCategory] = Field(..., min_items=3, max_items=4, description="EXACTLY 3-4 distinct sentiment categories")
+    consolidation_rationale: str = Field(..., min_length=100, max_length=1000, description="Explanation of consolidation decisions")
 
 
 class TaxonomyCurator:
     """Curates LLM analysis results into final taxonomy files."""
 
     def __init__(self):
+        # Initialize OpenAI client for LLM-based consolidation
+        api_key = os.getenv('OPENAI_API_KEY')
+        if not api_key:
+            logger.warning("OpenAI API key not found. LLM-based consolidation will be disabled.")
+            self.client = None
+        else:
+            self.client = OpenAI(api_key=api_key)
+
         self.curation_rules = {
             # Intent consolidation rules - More granular categories
             'intent_consolidation': {
@@ -383,6 +416,69 @@ class TaxonomyCurator:
         # If no match found, use original name (capitalized)
         return original_name.title()
 
+    def _convert_consolidated_to_rich_format(self, consolidated_taxonomy_obj, original_rich_taxonomy: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert consolidated taxonomy object back to rich taxonomy format."""
+
+        # Create new rich taxonomy structure
+        consolidated_rich_taxonomy = {
+            'intent_categories': {},
+            'sentiment_categories': {}
+        }
+
+        # Convert consolidated intent categories
+        for intent_cat in consolidated_taxonomy_obj.intent_categories:
+            consolidated_rich_taxonomy['intent_categories'][intent_cat.name] = {
+                'definition': intent_cat.definition,
+                'business_value': intent_cat.business_value,
+                'decision_rules': intent_cat.decision_rules,
+                'key_indicators': intent_cat.key_indicators,
+                'merged_categories': intent_cat.merged_categories,
+                'total_emails': self._sum_emails_from_merged_categories(
+                    intent_cat.merged_categories,
+                    original_rich_taxonomy['intent_categories']
+                ),
+                'clusters': self._collect_clusters_from_merged_categories(
+                    intent_cat.merged_categories,
+                    original_rich_taxonomy['intent_categories']
+                )
+            }
+
+        # Convert consolidated sentiment categories
+        for sentiment_cat in consolidated_taxonomy_obj.sentiment_categories:
+            consolidated_rich_taxonomy['sentiment_categories'][sentiment_cat.name] = {
+                'definition': sentiment_cat.definition,
+                'business_value': sentiment_cat.business_value,
+                'decision_rules': sentiment_cat.decision_rules,
+                'key_indicators': sentiment_cat.key_indicators,
+                'merged_categories': sentiment_cat.merged_categories,
+                'total_emails': self._sum_emails_from_merged_categories(
+                    sentiment_cat.merged_categories,
+                    original_rich_taxonomy['sentiment_categories']
+                ),
+                'clusters': self._collect_clusters_from_merged_categories(
+                    sentiment_cat.merged_categories,
+                    original_rich_taxonomy['sentiment_categories']
+                )
+            }
+
+        return consolidated_rich_taxonomy
+
+    def _sum_emails_from_merged_categories(self, merged_categories: list, original_categories: dict) -> int:
+        """Sum email counts from merged categories."""
+        total = 0
+        for category_name in merged_categories:
+            if category_name in original_categories:
+                total += original_categories[category_name].get('total_emails', 0)
+        return total
+
+    def _collect_clusters_from_merged_categories(self, merged_categories: list, original_categories: dict) -> list:
+        """Collect cluster IDs from merged categories."""
+        clusters = []
+        for category_name in merged_categories:
+            if category_name in original_categories:
+                clusters.extend(original_categories[category_name].get('clusters', []))
+        return list(set(clusters))  # Remove duplicates
+
     def generate_taxonomy_yaml(self, consolidated_taxonomy: Dict[str, Any], analysis_summary: Dict[str, Any]) -> Dict[str, Any]:
         """Generate the final taxonomy.yaml structure."""
 
@@ -649,7 +745,25 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
         # Extract rich content from LLM analysis
         rich_taxonomy = self._extract_rich_taxonomy(llm_analysis)
 
-        # Generate final taxonomy using rich content
+        # Apply LLM-based consolidation to reduce granular categories
+        if self.client:
+            logger.info("Applying LLM consolidation to reduce category count...")
+            try:
+                consolidated_taxonomy_obj = self._llm_consolidate_taxonomy(rich_taxonomy)
+
+                # Convert consolidated taxonomy object back to rich taxonomy format
+                consolidated_rich_taxonomy = self._convert_consolidated_to_rich_format(consolidated_taxonomy_obj, rich_taxonomy)
+
+                logger.info(f"Consolidation successful: {len(rich_taxonomy['intent_categories'])} → {len(consolidated_rich_taxonomy['intent_categories'])} intents, "
+                           f"{len(rich_taxonomy['sentiment_categories'])} → {len(consolidated_rich_taxonomy['sentiment_categories'])} sentiments")
+                rich_taxonomy = consolidated_rich_taxonomy
+
+            except Exception as e:
+                logger.warning(f"LLM consolidation failed: {e}. Proceeding with original taxonomy.")
+        else:
+            logger.warning("OpenAI client not available. Skipping LLM consolidation.")
+
+        # Generate final taxonomy using consolidated rich content
         analysis_summary = llm_analysis.get('analysis_summary', {})
         final_taxonomy = self.generate_rich_taxonomy_yaml(rich_taxonomy, analysis_summary)
 
@@ -657,9 +771,13 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
         structured_taxonomy = self._create_structured_taxonomy_for_guide(rich_taxonomy, analysis_summary)
         labeling_guide = self.generate_labeling_guide(structured_taxonomy)
 
+        # Generate system prompt for production use
+        system_prompt = self.generate_system_prompt(rich_taxonomy)
+
         results = {
             'final_taxonomy': final_taxonomy,
             'labeling_guide': labeling_guide,
+            'system_prompt': system_prompt,
             'curation_stats': {
                 'original_intent_categories': len(llm_analysis.get('cluster_analyses', {})),
                 'final_intent_categories': len(rich_taxonomy['intent_categories']),
@@ -693,6 +811,13 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
         with open(guide_path, 'w', encoding='utf-8') as f:
             f.write(curation_results['labeling_guide'])
         logger.info(f"Saved labeling guide to {guide_path}")
+
+        # Save system prompt for production use
+        if 'system_prompt' in curation_results:
+            prompt_path = output_dir / 'system_prompt.txt'
+            with open(prompt_path, 'w', encoding='utf-8') as f:
+                f.write(curation_results['system_prompt'])
+            logger.info(f"Saved production system prompt to {prompt_path}")
 
         # Save curation summary
         summary_path = output_dir / 'curation_summary.json'
@@ -767,18 +892,85 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
         logger.info(f"Extracted {len(intent_categories)} raw intent categories")
         logger.info(f"Extracted {len(sentiment_categories)} raw sentiment categories")
 
-        # DISABLE ALL CONSOLIDATION - Keep ALL categories as-is
-        # This preserves every single intent and sentiment category found by the LLM
-        # No merging, no filtering, no consolidation
-
-        logger.info("CONSOLIDATION DISABLED: Preserving ALL categories without merging or filtering")
-        logger.info(f"Keeping all {len(intent_categories)} intent categories")
-        logger.info(f"Keeping all {len(sentiment_categories)} sentiment categories")
-
-        return {
-            'intent_categories': intent_categories,  # Return raw categories without consolidation
-            'sentiment_categories': sentiment_categories  # Return raw categories without consolidation
+        # Use LLM-based consolidation to intelligently merge similar categories
+        granular_taxonomy = {
+            'intent_categories': intent_categories,
+            'sentiment_categories': sentiment_categories
         }
+
+        if self.client and (len(intent_categories) > 5 or len(sentiment_categories) > 4):
+            logger.info("Taxonomy has too many categories - applying LLM-based consolidation...")
+            try:
+                consolidated = self._llm_consolidate_taxonomy(granular_taxonomy)
+
+                # Convert consolidated categories back to the expected format
+                consolidated_intents = {}
+                consolidated_sentiments = {}
+
+                for intent in consolidated.intent_categories:
+                    # Calculate total emails from merged categories
+                    total_emails = sum(
+                        intent_categories[orig_name].get('total_emails', 0)
+                        for orig_name in intent.merged_categories
+                        if orig_name in intent_categories
+                    )
+
+                    # Combine clusters from merged categories
+                    all_clusters = []
+                    for orig_name in intent.merged_categories:
+                        if orig_name in intent_categories:
+                            all_clusters.extend(intent_categories[orig_name].get('clusters', []))
+
+                    consolidated_intents[intent.name] = {
+                        'definition': intent.definition,
+                        'decision_rules': intent.decision_rules,
+                        'sample_indicators': intent.key_indicators,
+                        'business_relevance': intent.business_value,
+                        'clusters': all_clusters,
+                        'total_emails': total_emails,
+                        'merged_from': intent.merged_categories
+                    }
+
+                for sentiment in consolidated.sentiment_categories:
+                    # Calculate total emails from merged categories
+                    total_emails = sum(
+                        sentiment_categories[orig_name].get('total_emails', 0)
+                        for orig_name in sentiment.merged_categories
+                        if orig_name in sentiment_categories
+                    )
+
+                    # Combine clusters from merged categories
+                    all_clusters = []
+                    for orig_name in sentiment.merged_categories:
+                        if orig_name in sentiment_categories:
+                            all_clusters.extend(sentiment_categories[orig_name].get('clusters', []))
+
+                    consolidated_sentiments[sentiment.name] = {
+                        'definition': sentiment.definition,
+                        'decision_rules': sentiment.decision_rules,
+                        'sample_indicators': sentiment.key_indicators,
+                        'business_relevance': sentiment.business_value,
+                        'clusters': all_clusters,
+                        'total_emails': total_emails,
+                        'merged_from': sentiment.merged_categories
+                    }
+
+                logger.info(f"LLM consolidation successful: {len(consolidated_intents)} intents, {len(consolidated_sentiments)} sentiments")
+                logger.info(f"Consolidation rationale: {consolidated.consolidation_rationale}")
+
+                return {
+                    'intent_categories': consolidated_intents,
+                    'sentiment_categories': consolidated_sentiments,
+                    'consolidation_applied': True,
+                    'consolidation_rationale': consolidated.consolidation_rationale
+                }
+
+            except Exception as e:
+                logger.warning(f"LLM consolidation failed: {e}. Falling back to granular taxonomy.")
+                return granular_taxonomy
+        else:
+            logger.info("Taxonomy size is reasonable - keeping granular categories")
+            return granular_taxonomy
 
     def _generate_realistic_examples(self, intent_name: str, indicators: List[str]) -> List[str]:
         """Generate realistic examples based on indicators."""
@@ -893,6 +1085,163 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
             ]
         }
         return examples.get(sentiment_name, [])
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=4, max=10)
+    )
+    def _llm_consolidate_taxonomy(self, granular_taxonomy: Dict[str, Any]) -> ConsolidatedTaxonomy:
+        """Use LLM to intelligently consolidate granular taxonomy into meaningful categories."""
+        if not self.client:
+            raise ValueError("OpenAI client not initialized. Cannot perform LLM-based consolidation.")
+
+        logger.info("Starting LLM-based taxonomy consolidation...")
+
+        # Prepare the granular taxonomy data for the LLM
+        intent_data = []
+        sentiment_data = []
+
+        for intent_name, intent_info in granular_taxonomy['intent_categories'].items():
+            intent_data.append({
+                'name': intent_name,
+                'definition': intent_info.get('definition', ''),
+                'email_count': intent_info.get('total_emails', 0),
+                'key_indicators': intent_info.get('sample_indicators', [])[:3]
+            })
+
+        for sentiment_name, sentiment_info in granular_taxonomy['sentiment_categories'].items():
+            sentiment_data.append({
+                'name': sentiment_name,
+                'definition': sentiment_info.get('definition', ''),
+                'email_count': sentiment_info.get('total_emails', 0),
+                'key_indicators': sentiment_info.get('sample_indicators', [])[:3]
+            })
+
+        # Sort by email count to prioritize major categories
+        intent_data.sort(key=lambda x: x['email_count'], reverse=True)
+        sentiment_data.sort(key=lambda x: x['email_count'], reverse=True)
+
+        prompt = f"""You are a business taxonomy expert specializing in customer communication analysis for collections operations.
+
+Your task is to AGGRESSIVELY consolidate a granular taxonomy of customer email categories into a minimal, actionable taxonomy suitable for business operations.
+
+## CURRENT TAXONOMY TO CONSOLIDATE
+
+**INTENT CATEGORIES ({len(intent_data)} categories):**
+{json.dumps(intent_data, indent=2)}
+
+**SENTIMENT CATEGORIES ({len(sentiment_data)} categories):**
+{json.dumps(sentiment_data, indent=2)}
+
+## MANDATORY CONSOLIDATION REQUIREMENTS
+
+**STRICT Target Output (NON-NEGOTIABLE):**
+- EXACTLY 3-5 Intent Categories (no more, no less)
+- EXACTLY 3-4 Sentiment Categories (no more, no less)
+
+**AGGRESSIVE Consolidation Principles:**
+1. **DEFAULT TO MERGE**: Unless categories require fundamentally different business actions, merge them
+2. **Eliminate Micro-Distinctions**: Remove subtle variations that don't change operations
+3. **Ruthless Simplification**: Prefer fewer, broader categories over granular specificity
+4. **Operational Focus**: Only preserve distinctions that change how collections agents respond
+
+**MANDATORY Intent Consolidation Actions:**
+- MUST merge ALL information update requests (banking, address, contact, account info) into ONE category
+- MUST merge ALL payment-related inquiries (status, methods, scheduling) into ONE category
+- MUST merge ALL administrative/clerical requests into ONE category
+- ONLY preserve categories that require completely different agent responses
+
+**MANDATORY Sentiment Consolidation Actions:**
+- MUST merge cooperative/professional/polite/courteous into ONE "Cooperative" category
+- MUST merge neutral/administrative/business-like/formal into ONE "Administrative" category
+- MUST merge all frustrated/angry/impatient/demanding into ONE "Frustrated" category
+- MUST merge all informational/factual/straightforward into ONE "Informational" category
+- DO NOT create more than 4 sentiment categories under any circumstances
+
+**CRITICAL INSTRUCTION:**
+If your initial consolidation results in more than 5 intents OR more than 4 sentiments, you MUST consolidate further until you meet these limits. The business requires this simplification.
+
+## OUTPUT FORMAT
+
+Respond with ONLY a valid JSON object matching this exact structure:
+
+{{
+    "intent_categories": [
+        {{
+            "name": "Clear Category Name",
+            "definition": "Precise definition of what customers want to achieve",
+            "business_value": "Why this matters for collections operations",
+            "merged_categories": ["Original Category 1", "Original Category 2"],
+            "decision_rules": ["Rule 1", "Rule 2", "Rule 3"],
+            "key_indicators": ["indicator1", "indicator2", "indicator3"]
+        }}
+    ],
+    "sentiment_categories": [
+        {{
+            "name": "Clear Sentiment Name",
+            "definition": "Precise definition of emotional tone/communication style",
+            "business_value": "Why this sentiment requires specific handling",
+            "merged_categories": ["Original Sentiment 1", "Original Sentiment 2"],
+            "decision_rules": ["Rule 1", "Rule 2", "Rule 3"],
+            "key_indicators": ["indicator1", "indicator2", "indicator3"]
+        }}
+    ],
+    "consolidation_rationale": "Brief explanation of your consolidation decisions and why the resulting categories are optimal for collections operations"
+}}
+
+CRITICAL: Return ONLY the JSON object. No additional text, explanations, or markdown formatting."""
+
+        logger.info(f"Consolidation prompt length: {len(prompt)} characters")
+        logger.debug(f"Consolidation prompt (first 1000 chars): {prompt[:1000]}...")
+
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "You are a business taxonomy expert. Respond with ONLY valid JSON - no other text."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.1,
+                max_tokens=4000  # Increased token limit
+            )
+
+            response_text = response.choices[0].message.content.strip()
+            logger.info(f"LLM consolidation response length: {len(response_text)} characters")
+            logger.debug(f"LLM consolidation response: {response_text[:500]}...")
+
+            if not response_text:
+                logger.error("Empty response from LLM")
+                raise ValueError("Empty response from LLM")
+
+            # Strip markdown code blocks if present
+            if response_text.startswith("```json"):
+                response_text = response_text[7:]  # Remove ```json
+            if response_text.startswith("```"):
+                response_text = response_text[3:]  # Remove ```
+            if response_text.endswith("```"):
+                response_text = response_text[:-3]  # Remove trailing ```
+
+            response_text = response_text.strip()
+
+            # Parse and validate the JSON response
+            try:
+                json_data = json.loads(response_text)
+                consolidated = ConsolidatedTaxonomy.model_validate(json_data)
+                logger.info(f"Successfully consolidated taxonomy: {len(consolidated.intent_categories)} intents, {len(consolidated.sentiment_categories)} sentiments")
+                return consolidated
+
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse LLM response as JSON: {e}")
+                logger.error(f"Response text: {response_text}")
+                raise
+            except Exception as e:
+                logger.error(f"Failed to validate consolidated taxonomy: {e}")
+                logger.error(f"JSON data: {json_data}")
+                raise
+
+        except Exception as e:
+            logger.error(f"LLM consolidation request failed: {e}")
+            raise
 
     def generate_rich_taxonomy_yaml(self, rich_taxonomy: Dict[str, Any], analysis_summary: Dict[str, Any]) -> str:
         """Generate clean, well-formatted taxonomy YAML matching reference structure."""
@@ -1090,6 +1439,166 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
             f"Request for {intent_name.lower()}",
             f"Communication regarding {intent_name.lower()}"
         ]
+
+    def generate_system_prompt(self, consolidated_taxonomy: Dict[str, Any]) -> str:
+        """Generate production-ready system prompt for NetSuite email classification."""
+
+        intent_categories = consolidated_taxonomy['intent_categories']
+        sentiment_categories = consolidated_taxonomy['sentiment_categories']
+
+        # Calculate total emails for coverage percentages
+        total_emails = sum(cat.get('total_emails', 0) for cat in intent_categories.values())
+
+        prompt = f"""# NetSuite Collection Email Classification System
+
+You are an expert email classifier for collections operations. Your task is to analyze incoming customer emails and classify them by INTENT and SENTIMENT to help collections teams respond appropriately.
+
+## CLASSIFICATION OVERVIEW
+
+**INTENT**: What the customer wants to achieve (their purpose/goal)
+**SENTIMENT**: The customer's emotional tone and communication style
+
+You must classify each email with exactly ONE intent and ONE sentiment category.
+
+## INTENT CATEGORIES
+
+"""
+
+        # Add intent categories with examples and decision rules
+        for intent_name, intent_data in intent_categories.items():
+            coverage_pct = (intent_data.get('total_emails', 0) / total_emails) * 100 if total_emails > 0 else 0
+
+            prompt += f"""### {intent_name}
+
+**Definition**: {intent_data.get('definition', 'No definition available')}
+
+**When to use**:
+"""
+            for rule in intent_data.get('decision_rules', [])[:3]:  # Top 3 rules
+                prompt += f"- {rule}\n"
+
+            prompt += f"""
+**Key indicators**: {', '.join(f'"{ind}"' for ind in intent_data.get('key_indicators', [])[:4])}
+
+**Business impact**: {intent_data.get('business_relevance', 'Standard processing')}
+
+"""
+
+        prompt += f"""
+## SENTIMENT CATEGORIES
+
+"""
+
+        # Add sentiment categories
+        for sentiment_name, sentiment_data in sentiment_categories.items():
+            coverage_pct = (sentiment_data.get('total_emails', 0) / total_emails) * 100 if total_emails > 0 else 0
+
+            prompt += f"""### {sentiment_name}
+
+**Definition**: {sentiment_data.get('definition', 'No definition available')}
+
+**When to use**:
+"""
+            for rule in sentiment_data.get('decision_rules', [])[:3]:  # Top 3 rules
+                prompt += f"- {rule}\n"
+
+            prompt += f"""
+**Key indicators**: {', '.join(f'"{ind}"' for ind in sentiment_data.get('key_indicators', [])[:4])}
+
+**Collections impact**: {sentiment_data.get('business_relevance', 'Standard handling')}
+
+"""
+
+        # Add classification instructions and output format
+        prompt += f"""
+## CLASSIFICATION PROCESS
+
+1. **Read the complete email** including subject line and body content
+2. **Identify the primary intent** - what does the customer want?
+3. **Determine the sentiment** - how are they communicating?
+4. **Apply business context** - consider collections operational needs
+5. **Choose the most specific applicable categories**
+
+## OUTPUT FORMAT
+
+Respond with ONLY a valid JSON object in this exact format:
+
+```json
+{{
+    "intent": "Exact Intent Category Name",
+    "sentiment": "Exact Sentiment Category Name",
+    "confidence": "high|medium|low",
+    "reasoning": "Brief 1-2 sentence explanation of classification decision",
+    "key_phrases": ["phrase1", "phrase2", "phrase3"],
+    "business_priority": "high|medium|low",
+    "suggested_action": "Recommended next step for collections team"
+}}
+```
+
+## CLASSIFICATION GUIDELINES
+
+**Intent Priority Rules**:
+- Focus on the customer's PRIMARY purpose, not secondary mentions
+- When multiple intents are present, choose the one requiring immediate action
+- Consider the business impact of misclassification
+
+**Sentiment Priority Rules**:
+- Prioritize emotionally significant sentiments (frustrated > cooperative > neutral)
+- Consider how the sentiment affects required response approach
+- Look for subtle emotional indicators beyond obvious language
+
+**Quality Standards**:
+- **High confidence**: Clear indicators, unambiguous classification
+- **Medium confidence**: Some indicators present, minor ambiguity
+- **Low confidence**: Weak indicators, significant uncertainty
+
+**Business Priority Guidelines**:
+- **High**: Urgent issues, frustrated customers, payment problems
+- **Medium**: Standard requests, cooperative customers, routine updates
+- **Low**: Informational only, no immediate action required
+
+## EXAMPLES
+
+"""
+
+        # Add a few examples from each major category
+        example_count = 0
+        for intent_name, intent_data in list(intent_categories.items())[:2]:  # Top 2 intents
+            prompt += f"""**{intent_name} Example**:
+```
+Subject: Banking Information Update
+Body: Please update your records with our new banking details for future payments.
+
+Classification:
+{{
+    "intent": "{intent_name}",
+    "sentiment": "Cooperative",
+    "confidence": "high",
+    "reasoning": "Clear request to update banking information with polite tone",
+    "key_phrases": ["please update", "banking details", "future payments"],
+    "business_priority": "medium",
+    "suggested_action": "Update customer records and acknowledge receipt"
+}}
+```
+
+"""
+            example_count += 1
+
+        prompt += f"""
+## CRITICAL REMINDERS
+
+- Respond with ONLY the JSON object - no additional text or formatting
+- Use exact category names as defined above
+- Ensure JSON is valid and properly formatted
+- Consider collections operational context in your decisions
+- When uncertain, prioritize business value over perfect categorization
+
+---
+
+*This system prompt was generated from analysis of {total_emails} real customer collection emails*
+"""
+
+        return prompt
 
     def _create_structured_taxonomy_for_guide(self, rich_taxonomy: Dict[str, Any], analysis_summary: Dict[str, Any]) -> Dict[str, Any]:
         """Create a structured taxonomy dict for labeling guide generation."""
