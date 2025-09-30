@@ -1087,13 +1087,29 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
 
     def _clean_email_for_example(self, content: str) -> str:
         """Clean email content for use as an example in taxonomy/prompts."""
-        # Remove excessive whitespace
+        import re
+
+        # Step 1: Handle both literal escaped sequences (\\r\\n) and actual characters (\r\n)
+        # Replace literal escaped sequences first
+        content = content.replace('\\r\\n', '\n').replace('\\r', '\n').replace('\\n', '\n')
+        # Then replace actual carriage returns and newlines
+        content = content.replace('\r\n', '\n').replace('\r', '\n')
+
+        # Step 2: Remove excessive consecutive newlines (more than 2 in a row)
+        content = re.sub(r'\n{3,}', '\n\n', content)
+
+        # Step 3: Split into lines and remove empty/whitespace-only lines
         lines = [line.strip() for line in content.split('\n') if line.strip()]
 
-        # Limit to first ~300 characters for conciseness
-        cleaned = '\n'.join(lines)
+        # Step 4: Join with single space (for compact display in examples)
+        cleaned = ' '.join(lines)
+
+        # Step 5: Remove excessive spaces (more than 2 in a row)
+        cleaned = re.sub(r' {3,}', ' ', cleaned)
+
+        # Step 6: Limit to first ~300 characters for conciseness
         if len(cleaned) > 400:
-            # Truncate and add ellipsis
+            # Truncate at word boundary and add ellipsis
             cleaned = cleaned[:400].rsplit(' ', 1)[0] + '...'
 
         return cleaned
