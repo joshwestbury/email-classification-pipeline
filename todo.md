@@ -659,6 +659,95 @@ Baseline vs. Current vs. Targets:
 - **Processing Speed**: Variable → Current: Variable → Target: <30s for 1000 emails
 - **Category Preservation**: Heavy consolidation → **✅ ALL categories preserved** → Target: Comprehensive taxonomy
 
+### 🎯 PHASE 2.3: NetSuite Production Optimization (Current Priority)
+
+**Goal**: Optimize taxonomy generation to maximize usefulness for NetSuite Collections team
+
+**Context**: After removing hardcoded categories, ensure pipeline generates actionable, operationally distinct categories that help collections agents make decisions.
+
+#### High Priority Tasks
+
+**1. Fix Key Indicators for Distinctiveness** 🎯
+- [ ] Update curator.py consolidation prompt to request UNIQUE indicators per category
+- [ ] Specify indicators must distinguish THIS category from OTHERS
+- [ ] Add validation: indicators appearing in multiple categories should be flagged
+- [ ] Example improvement: Instead of generic "please update your records" across 3 categories, find specific distinguishing phrases
+- **Impact**: Directly improves LLM classification accuracy in production
+- **File**: `pipeline/curator.py` - `_llm_consolidate_taxonomy()` method
+
+**2. Extract Real Email Examples from Clusters** 📧
+- [ ] Modify curator.py to extract 2-3 actual anonymized emails from each cluster
+- [ ] Replace generic placeholder examples in system prompt with real email snippets
+- [ ] Ensure examples show edge cases between similar categories
+- [ ] Store examples in rich taxonomy structure for system prompt generation
+- **Impact**: Proven to dramatically improve LLM few-shot learning performance
+- **File**: `pipeline/curator.py` - Add `_extract_real_examples_from_clusters()` method
+- **Benefit**: Real examples provide concrete guidance vs abstract descriptions
+
+#### Medium Priority Tasks
+
+**3. Add Payment Risk Dimension** 💰
+- [ ] Design payment risk classification: Committed, Negotiating, Disputing, Unable, Unknown
+- [ ] Add as modifier flag or third classification dimension
+- [ ] Update LLM analyzer prompt to detect payment commitment language
+- [ ] Include in system prompt output format
+- **Impact**: Core to collections prioritization - which customers need immediate attention?
+- **File**: `pipeline/analyzer.py` and `pipeline/curator.py`
+
+**4. Add Actionability Metadata to Categories** 🎬
+- [ ] Enhance consolidation prompt to request for each category:
+  - Response urgency (immediate/same-day/1-3 days/informational)
+  - Required skill level (automated/junior/senior/manager)
+  - Expected resolution type (payment collection/dispute resolution/information exchange)
+- [ ] Add actionability fields to taxonomy YAML output
+- [ ] Include in system prompt for NetSuite classification
+- **Impact**: Helps route emails to appropriate collections agents
+- **File**: `pipeline/curator.py` - enhance taxonomy structure
+
+#### Low Priority Tasks
+
+**5. Coverage Validation and Warnings** ⚠️
+- [ ] Add validation step after consolidation
+- [ ] Flag categories with <10% coverage for review
+- [ ] Suggest merging very small categories during consolidation
+- [ ] Add coverage quality metrics to pipeline summary
+- **Impact**: Ensures statistically meaningful categories
+- **File**: `pipeline/curator.py` - add `_validate_category_coverage()` method
+
+**6. Edge Case Documentation** 📋
+- [ ] Generate "borderline cases" between each pair of categories
+- [ ] Add to system prompt to help with ambiguous classifications
+- [ ] Include confidence calibration guidance
+- **Impact**: Improves handling of difficult-to-classify emails
+- **File**: `pipeline/curator.py` - system prompt generation
+
+#### Infrastructure: JSON Source File Validation
+
+**Source Data Quality Check** 🔧
+- [ ] **DECISION NEEDED**: Should we add JSON validation/repair to the pipeline?
+- [ ] Current state: `data_processor.py` has robust `parse_malformed_json()` already
+- [ ] Existing capability handles:
+  - Unescaped quotes
+  - Missing delimiters
+  - Structural issues
+  - Field extraction as last resort
+- [ ] **Recommendation**: Current approach is sufficient - repairs on-the-fly during processing
+- [ ] **Alternative**: Create standalone `validate_source_json.py` utility if needed for pre-validation
+- [ ] Consider adding validation reporting to pipeline summary (show repair stats)
+
+**Question for Review**:
+The pipeline's `DataProcessor.parse_malformed_json()` already handles JSON issues comprehensively with 4-stage repair strategies. Do we need a separate pre-validation step, or is the current on-the-fly repair sufficient?
+
+**Advantages of current approach**:
+- ✅ No data loss - repairs happen during processing
+- ✅ Detailed logging of repair attempts
+- ✅ Multiple fallback strategies
+- ✅ Field-level extraction as last resort
+
+**Potential addition**:
+- Add `--validate-only` flag to pipeline for pre-checking source files
+- Generate JSON validation report before full pipeline run
+
 ---
 
 *This TODO reflects current pipeline status and incorporates expert recommendations for production readiness. Updated as tasks are completed and requirements evolve.*

@@ -42,3 +42,13 @@ Thumbs.db
 *.temp
 temp/
 logs/
+
+# Test files
+test_*.py
+test_*.json
+test_*.txt
+
+# Pipeline outputs and data
+outputs/
+source_data/
+.anonymization_salt
