@@ -290,7 +290,7 @@ class LLMAnalyzer:
 
         The pre-analysis sentiment data above shows pattern-based detection. Consider:
         - High-confidence minority sentiments may be more significant than dominant patterns
-        - Frustrated/angry customers need different handling even if they're a minority
+        - Customers expressing negative emotions need different handling even if they're a minority
         - True emotional neutrality is rare - look for subtle emotional indicators
         - Business communications can still carry emotional undertones
 

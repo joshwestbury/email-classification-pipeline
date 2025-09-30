@@ -503,24 +503,24 @@ class TaxonomyCurator:
             }
         }
 
-        # Add intent categories
+        # Add intent categories - use LLM-generated content directly
         for intent_name, intent_data in intent_categories.items():
             taxonomy['intent_categories'][intent_name] = {
-                'definition': self._refine_definition(intent_data['definition'], intent_name),
-                'examples': self._generate_examples(intent_name, 'intent'),
-                'decision_rules': self._generate_decision_rules(intent_name, 'intent'),
+                'definition': intent_data.get('definition', ''),
+                'examples': intent_data.get('sample_indicators', []),
+                'decision_rules': intent_data.get('decision_rules', []),
                 'coverage': {
                     'total_emails': intent_data['total_emails'],
                     'clusters': len(intent_data['clusters'])
                 }
             }
 
-        # Add sentiment categories
+        # Add sentiment categories - use LLM-generated content directly
         for sentiment_name, sentiment_data in sentiment_categories.items():
             taxonomy['sentiment_categories'][sentiment_name] = {
-                'definition': self._refine_definition(sentiment_data['definition'], sentiment_name),
-                'examples': self._generate_examples(sentiment_name, 'sentiment'),
-                'decision_rules': self._generate_decision_rules(sentiment_name, 'sentiment'),
+                'definition': sentiment_data.get('definition', ''),
+                'examples': sentiment_data.get('sample_indicators', []),
+                'decision_rules': sentiment_data.get('decision_rules', []),
                 'coverage': {
                     'total_emails': sentiment_data['total_emails'],
                     'clusters': len(sentiment_data['clusters'])
@@ -528,123 +528,6 @@ class TaxonomyCurator:
             }
 
         return taxonomy
-
-    def _refine_definition(self, original_definition: str, category_name: str) -> str:
-        """Refine category definitions for clarity and consistency."""
-
-        # Predefined refined definitions
-        refined_definitions = {
-            'Payment Inquiry': 'Questions about payment status, methods, schedules, or acknowledgment of payments made',
-            'Invoice Management': 'Requests for invoice details, corrections, documentation, or billing-related clarifications',
-            'Information Request': 'General information requests not specifically related to payments or invoices',
-            'Cooperative': 'Willing to work together, shows positive engagement and collaboration',
-            'Administrative': 'Neutral, business-focused communication without emotional indicators',
-            'Informational': 'Seeking or providing factual information in a straightforward manner',
-            'Frustrated': 'Expressing dissatisfaction, impatience, or negative emotions about the situation'
-        }
-
-        return refined_definitions.get(category_name, original_definition)
-
-    def _generate_examples(self, category_name: str, category_type: str) -> List[str]:
-        """Generate example phrases/indicators for each category."""
-
-        examples = {
-            'intent': {
-                'Payment Inquiry': [
-                    'When will my payment be processed?',
-                    'I made a payment last week, has it been received?',
-                    'What payment methods do you accept?',
-                    'Can I set up a payment plan?'
-                ],
-                'Invoice Management': [
-                    'Can you send me a copy of invoice #12345?',
-                    'There seems to be an error on my bill',
-                    'I need an updated invoice with correct address',
-                    'Please explain these charges on my statement'
-                ],
-                'Information Request': [
-                    'What is my current account balance?',
-                    'Who should I contact about this matter?',
-                    'Can you explain your company policy?',
-                    'I need information about my account status'
-                ]
-            },
-            'sentiment': {
-                'Cooperative': [
-                    'I want to resolve this matter quickly',
-                    'Please let me know how I can help',
-                    'Thank you for your assistance',
-                    'I appreciate your patience'
-                ],
-                'Administrative': [
-                    'Please update my account information',
-                    'I am writing to inform you...',
-                    'This is regarding account number...',
-                    'Per our previous correspondence'
-                ],
-                'Informational': [
-                    'I need clarification on...',
-                    'Could you please explain...',
-                    'I am inquiring about...',
-                    'What is the status of...'
-                ],
-                'Frustrated': [
-                    'This is unacceptable',
-                    'I am very disappointed',
-                    'This has been going on too long',
-                    'Why has this not been resolved?'
-                ]
-            }
-        }
-
-        return examples.get(category_type, {}).get(category_name, [])
-
-    def _generate_decision_rules(self, category_name: str, category_type: str) -> List[str]:
-        """Generate decision rules for each category."""
-
-        rules = {
-            'intent': {
-                'Payment Inquiry': [
-                    'Contains questions about payment status or confirmation',
-                    'Mentions payment methods, schedules, or arrangements',
-                    'Asks about received payments or payment processing'
-                ],
-                'Invoice Management': [
-                    'Requests invoice copies, corrections, or clarifications',
-                    'Mentions billing errors or discrepancies',
-                    'Asks for documentation or statement details'
-                ],
-                'Information Request': [
-                    'General questions not related to payments or invoices',
-                    'Requests for account information or company policies',
-                    'Seeks clarification on procedures or contacts'
-                ]
-            },
-            'sentiment': {
-                'Cooperative': [
-                    'Uses polite language and collaborative tone',
-                    'Expresses willingness to resolve issues',
-                    'Shows appreciation or patience'
-                ],
-                'Administrative': [
-                    'Uses formal, business-like language',
-                    'Neutral tone without emotional indicators',
-                    'Focuses on facts and procedures'
-                ],
-                'Informational': [
-                    'Primarily asks questions or seeks clarification',
-                    'Neutral to slightly positive tone',
-                    'Fact-seeking rather than emotional'
-                ],
-                'Frustrated': [
-                    'Uses negative language or expresses dissatisfaction',
-                    'Shows impatience or urgency',
-                    'Contains complaints or criticism'
-                ]
-            }
-        }
-
-        return rules.get(category_type, {}).get(category_name, [])
 
     def generate_labeling_guide(self, taxonomy: Dict[str, Any]) -> str:
         """Generate comprehensive labeling guide markdown."""
@@ -989,102 +872,6 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
 
         return examples
 
-    def _get_business_value_for_sentiment(self, sentiment_name: str) -> str:
-        """Get business value description for sentiment."""
-        business_values = {
-            'Cooperative': 'Identify engaged customers likely to resolve issues quickly',
-            'Administrative': 'Standard processing - routine business communications',
-            'Informational': 'Track information gaps and communication needs',
-            'Frustrated': 'Flag for priority handling and relationship management'
-        }
-        return business_values.get(sentiment_name, 'Track customer sentiment patterns')
-
-    def _generate_sentiment_decision_rules(self, sentiment_name: str) -> List[str]:
-        """Generate decision rules for sentiment categories."""
-        rules = {
-            'Cooperative': [
-                'Customer offers to provide additional information',
-                'Customer confirms payment actions or timeline',
-                'Customer apologizes for delays or issues',
-                'Customer actively works toward resolution'
-            ],
-            'Administrative': [
-                'Email reports system or processing issues',
-                'Email requests cancellations or corrections due to errors',
-                'Email provides administrative status updates',
-                'Email mentions processing delays or technical problems'
-            ],
-            'Informational': [
-                'Email confirms successful payment completion',
-                'Email provides routine business updates or quotes',
-                'Email requests feedback or procedural information',
-                'Email is not directly collection-related'
-            ],
-            'Frustrated': [
-                'Customer expresses dissatisfaction or frustration',
-                'Customer uses urgent or demanding language',
-                'Customer mentions escalation or complaints'
-            ]
-        }
-        return rules.get(sentiment_name, [])
-
-    def _generate_sentiment_indicators(self, sentiment_name: str) -> List[str]:
-        """Generate key indicators for sentiment categories."""
-        indicators = {
-            'Cooperative': [
-                'happy to provide',
-                'apologies for the delays',
-                'trying to resolve this',
-                'let me know if you need',
-                'payment has been initiated'
-            ],
-            'Administrative': [
-                'cancel the invoice',
-                'awaiting payment',
-                'processed and currently awaiting',
-                'unexpected error',
-                'system issue'
-            ],
-            'Informational': [
-                'invoice has been paid',
-                'please submit through',
-                'draft quote attached',
-                'opinion matters',
-                'feedback request'
-            ],
-            'Frustrated': [
-                'unacceptable delay',
-                'need immediate resolution',
-                'escalating this issue',
-                'extremely disappointed'
-            ]
-        }
-        return indicators.get(sentiment_name, [])
-
-    def _generate_sentiment_examples(self, sentiment_name: str) -> List[str]:
-        """Generate examples for sentiment categories."""
-        examples = {
-            'Cooperative': [
-                'Apologies for the delay, payment will be processed tomorrow',
-                'Happy to provide the W9 form you requested',
-                'Let me loop in our AP team to resolve this quickly'
-            ],
-            'Administrative': [
-                'Please cancel invoice #INV123 due to system error',
-                'Invoice processed and currently awaiting final approval',
-                'Unexpected error occurred during payment processing'
-            ],
-            'Informational': [
-                'Your invoice has been paid via check #12345',
-                'Please submit future invoices through our portal',
-                'Please find attached draft quote as requested'
-            ],
-            'Frustrated': [
-                'This is the third time I have requested this information',
-                'Need immediate resolution - this delay is unacceptable'
-            ]
-        }
-        return examples.get(sentiment_name, [])
 
     @retry(
         stop=stop_after_attempt(3),
@@ -1123,7 +910,7 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
 
         prompt = f"""You are a business taxonomy expert specializing in customer communication analysis for collections operations.
 
-Your task is to AGGRESSIVELY consolidate a granular taxonomy of customer email categories into a minimal, actionable taxonomy suitable for business operations.
+Your task is to consolidate a granular taxonomy of customer email categories into a streamlined, actionable taxonomy suitable for business operations.
 
 ## CURRENT TAXONOMY TO CONSOLIDATE
 
@@ -1133,33 +920,35 @@ Your task is to AGGRESSIVELY consolidate a granular taxonomy of customer email c
 **SENTIMENT CATEGORIES ({len(sentiment_data)} categories):**
 {json.dumps(sentiment_data, indent=2)}
 
-## MANDATORY CONSOLIDATION REQUIREMENTS
+## CONSOLIDATION REQUIREMENTS
 
-**STRICT Target Output (NON-NEGOTIABLE):**
-- EXACTLY 3-5 Intent Categories (no more, no less)
-- EXACTLY 3-4 Sentiment Categories (no more, no less)
+**Target Output:**
+- 3-5 Intent Categories that capture distinct customer purposes
+- 3-4 Sentiment Categories that reflect meaningful emotional tones
 
-**AGGRESSIVE Consolidation Principles:**
-1. **DEFAULT TO MERGE**: Unless categories require fundamentally different business actions, merge them
-2. **Eliminate Micro-Distinctions**: Remove subtle variations that don't change operations
-3. **Ruthless Simplification**: Prefer fewer, broader categories over granular specificity
-4. **Operational Focus**: Only preserve distinctions that change how collections agents respond
+**Consolidation Principles:**
+1. **Semantic Similarity**: Merge categories that have similar meanings or serve similar business purposes
+2. **Operational Distinctness**: Keep categories separate ONLY if they require fundamentally different agent responses
+3. **Data-Driven Naming**: Use category names that emerge from the actual patterns observed in the data
+4. **Eliminate Redundancy**: Merge overlapping or redundant categories while preserving meaningful distinctions
 
-**MANDATORY Intent Consolidation Actions:**
-- MUST merge ALL information update requests (banking, address, contact, account info) into ONE category
-- MUST merge ALL payment-related inquiries (status, methods, scheduling) into ONE category
-- MUST merge ALL administrative/clerical requests into ONE category
-- ONLY preserve categories that require completely different agent responses
+**Intent Consolidation Guidelines:**
+- Identify which intent categories describe similar customer purposes
+- Merge categories that would trigger the same operational response
+- Preserve distinctions that genuinely affect how collections agents should respond
+- Choose consolidated category names that best represent the merged group
 
-**MANDATORY Sentiment Consolidation Actions:**
-- MUST merge cooperative/professional/polite/courteous into ONE "Cooperative" category
-- MUST merge neutral/administrative/business-like/formal into ONE "Administrative" category
-- MUST merge all frustrated/angry/impatient/demanding into ONE "Frustrated" category
-- MUST merge all informational/factual/straightforward into ONE "Informational" category
-- DO NOT create more than 4 sentiment categories under any circumstances
+**Sentiment Consolidation Guidelines:**
+- Identify which sentiment categories describe similar emotional tones or communication styles
+- Merge categories with overlapping emotional characteristics
+- Preserve distinctions that require different handling approaches
+- Choose consolidated category names that authentically reflect the emotional patterns observed
 
-**CRITICAL INSTRUCTION:**
-If your initial consolidation results in more than 5 intents OR more than 4 sentiments, you MUST consolidate further until you meet these limits. The business requires this simplification.
+**Critical Instructions:**
+- Category names should emerge from the DATA, not from preconceptions
+- If consolidation results in too many categories, continue merging the most similar ones
+- Focus on business utility - each category should provide actionable insights
+- Respect the actual communication patterns present in the analyzed emails
 
 ## OUTPUT FORMAT
 
