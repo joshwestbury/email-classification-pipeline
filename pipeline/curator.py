@@ -947,23 +947,41 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
         # Build email lookup: index -> email content
         # IMPORTANT: Index must match cluster_labels array (which only contains incoming emails)
         email_lookup = {}
-        threads = email_data.get('threads', [])
 
-        incoming_email_index = 0
-        for thread in threads:
-            for email in thread.get('emails', []):
-                # Only use incoming customer emails
+        # Handle both data structures:
+        # - processed_data has 'threads' key
+        # - anonymized_data has 'emails' key (flat list)
+        if 'threads' in email_data:
+            # Threaded structure (processed_data)
+            threads = email_data.get('threads', [])
+            incoming_email_index = 0
+            for thread in threads:
+                for email in thread.get('emails', []):
+                    if email.get('direction') == 'incoming':
+                        content = email.get('content', '').strip()
+                        if content:
+                            email_lookup[incoming_email_index] = {
+                                'content': content,
+                                'subject': thread.get('subject', ''),
+                                'email_id': email.get('id', '')
+                            }
+                        incoming_email_index += 1
+        elif 'emails' in email_data:
+            # Flat structure (anonymized_data)
+            emails = email_data.get('emails', [])
+            incoming_email_index = 0
+            for email in emails:
                 if email.get('direction') == 'incoming':
                     content = email.get('content', '').strip()
                     if content:
                         email_lookup[incoming_email_index] = {
                             'content': content,
-                            'subject': thread.get('subject', ''),
+                            'subject': email.get('subject', ''),
                             'email_id': email.get('id', '')
                         }
-                    # Increment for ALL incoming emails (even those without content)
-                    # to match cluster_labels indexing
                     incoming_email_index += 1
+        else:
+            logger.error(f"Unknown email data structure. Keys: {list(email_data.keys())}")
 
         logger.info(f"Built email lookup with {len(email_lookup)} incoming emails")
 
