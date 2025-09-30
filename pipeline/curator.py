@@ -32,7 +32,7 @@ class ConsolidatedCategory(BaseModel):
     business_value: str = Field(..., min_length=10, max_length=300, description="Business value for collections operations")
     merged_categories: List[str] = Field(..., min_items=1, description="List of original categories merged into this one")
     decision_rules: List[str] = Field(..., min_items=1, max_items=5, description="Clear decision rules for classification")
-    key_indicators: List[str] = Field(..., min_items=1, max_items=5, description="Key phrases or indicators")
+    key_indicators: List[str] = Field(..., min_items=1, max_items=5, description="UNIQUE phrases that distinguish THIS category from others - must be specific, not generic")
 
 
 class ConsolidatedTaxonomy(BaseModel):
@@ -634,8 +634,14 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
             try:
                 consolidated_taxonomy_obj = self._llm_consolidate_taxonomy(rich_taxonomy)
 
+                # Validate indicator uniqueness and store results
+                duplicates = self._validate_indicator_uniqueness(consolidated_taxonomy_obj)
+
                 # Convert consolidated taxonomy object back to rich taxonomy format
                 consolidated_rich_taxonomy = self._convert_consolidated_to_rich_format(consolidated_taxonomy_obj, rich_taxonomy)
+
+                # Store indicator uniqueness issues in the taxonomy for reporting
+                consolidated_rich_taxonomy['indicator_uniqueness_issues'] = duplicates
 
                 logger.info(f"Consolidation successful: {len(rich_taxonomy['intent_categories'])} → {len(consolidated_rich_taxonomy['intent_categories'])} intents, "
                            f"{len(rich_taxonomy['sentiment_categories'])} → {len(consolidated_rich_taxonomy['sentiment_categories'])} sentiments")
@@ -657,6 +663,9 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
         # Generate system prompt for production use
         system_prompt = self.generate_system_prompt(rich_taxonomy)
 
+        # Check for any quality issues with indicators
+        indicator_uniqueness_issues = rich_taxonomy.get('indicator_uniqueness_issues', {})
+
         results = {
             'final_taxonomy': final_taxonomy,
             'labeling_guide': labeling_guide,
@@ -667,7 +676,9 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
                 'original_sentiment_categories': len(set([analysis.get('proposed_sentiment', '').split('/')[0] for analysis in llm_analysis.get('cluster_analyses', {}).values()])),
                 'final_sentiment_categories': len(rich_taxonomy['sentiment_categories']),
                 'total_emails_covered': analysis_summary.get('total_emails_in_analyzed_clusters', 0),
-                'coverage_percentage': analysis_summary.get('coverage_percentage', 0)
+                'coverage_percentage': analysis_summary.get('coverage_percentage', 0),
+                'indicator_uniqueness_issues': len(indicator_uniqueness_issues),
+                'duplicate_indicators': indicator_uniqueness_issues if indicator_uniqueness_issues else None
             }
         }
 
@@ -841,11 +852,15 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
                 logger.info(f"LLM consolidation successful: {len(consolidated_intents)} intents, {len(consolidated_sentiments)} sentiments")
                 logger.info(f"Consolidation rationale: {consolidated.consolidation_rationale}")
 
+                # Validate indicator uniqueness
+                duplicates = self._validate_indicator_uniqueness(consolidated)
+
                 return {
                     'intent_categories': consolidated_intents,
                     'sentiment_categories': consolidated_sentiments,
                     'consolidation_applied': True,
-                    'consolidation_rationale': consolidated.consolidation_rationale
+                    'consolidation_rationale': consolidated.consolidation_rationale,
+                    'indicator_uniqueness_issues': duplicates
                 }
 
             except Exception as e:
@@ -872,6 +887,38 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
 
         return examples
 
+
+    def _validate_indicator_uniqueness(self, consolidated_taxonomy: ConsolidatedTaxonomy) -> Dict[str, List[str]]:
+        """
+        Validate that key indicators are unique across categories.
+
+        Returns a dict of {indicator: [category_names]} for any indicators that appear in multiple categories.
+        """
+        all_categories = list(consolidated_taxonomy.intent_categories) + list(consolidated_taxonomy.sentiment_categories)
+
+        # Build indicator -> categories mapping
+        indicator_to_categories = {}
+
+        for category in all_categories:
+            for indicator in category.key_indicators:
+                indicator_lower = indicator.lower().strip()
+                if indicator_lower not in indicator_to_categories:
+                    indicator_to_categories[indicator_lower] = []
+                indicator_to_categories[indicator_lower].append(category.name)
+
+        # Find duplicates
+        duplicates = {
+            indicator: categories
+            for indicator, categories in indicator_to_categories.items()
+            if len(categories) > 1
+        }
+
+        if duplicates:
+            logger.warning(f"Found {len(duplicates)} indicators appearing in multiple categories:")
+            for indicator, categories in duplicates.items():
+                logger.warning(f"  '{indicator}' appears in: {', '.join(categories)}")
+
+        return duplicates
 
     @retry(
         stop=stop_after_attempt(3),
@@ -950,6 +997,15 @@ Your task is to consolidate a granular taxonomy of customer email categories int
 - Focus on business utility - each category should provide actionable insights
 - Respect the actual communication patterns present in the analyzed emails
 
+**KEY INDICATORS REQUIREMENT - CRITICAL:**
+- Each category MUST have UNIQUE key indicators that distinguish it from OTHER categories
+- Key indicators must be SPECIFIC phrases or patterns that appear ONLY in this category
+- Avoid generic indicators that could apply to multiple categories (e.g., "please update your records")
+- Good indicators: "payment arrangement request", "dispute invoice charges", "hardship circumstances"
+- Bad indicators: "thank you", "please", "regarding account" (too generic)
+- If you find the same indicator appearing in multiple categories, it MUST be removed or made more specific
+- Think: "What phrases would let me distinguish THIS category from similar ones?"
+
 ## OUTPUT FORMAT
 
 Respond with ONLY a valid JSON object matching this exact structure:
@@ -1017,6 +1073,15 @@ CRITICAL: Return ONLY the JSON object. No additional text, explanations, or mark
                 json_data = json.loads(response_text)
                 consolidated = ConsolidatedTaxonomy.model_validate(json_data)
                 logger.info(f"Successfully consolidated taxonomy: {len(consolidated.intent_categories)} intents, {len(consolidated.sentiment_categories)} sentiments")
+
+                # Validate indicator uniqueness
+                duplicates = self._validate_indicator_uniqueness(consolidated)
+                if duplicates:
+                    logger.warning(f"⚠️  QUALITY ISSUE: {len(duplicates)} indicators are not unique across categories")
+                    logger.warning("This may reduce classification accuracy in production. Consider regenerating or manually editing indicators.")
+                else:
+                    logger.info("✅ All key indicators are unique across categories")
+
                 return consolidated
 
             except json.JSONDecodeError as e:
