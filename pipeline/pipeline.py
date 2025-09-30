@@ -238,7 +238,16 @@ class TaxonomyPipeline:
         curator = TaxonomyCurator()
 
         analysis_results = self.state['llm_analysis']
-        curation_results = curator.curate_taxonomy(analysis_results)
+
+        # Pass email and cluster data for real example extraction
+        email_data = self.state.get('anonymized_data') or self.state.get('processed_data')
+        cluster_data = self.state.get('clusters')
+
+        curation_results = curator.curate_taxonomy(
+            analysis_results,
+            email_data=email_data,
+            cluster_data=cluster_data
+        )
 
         if self.config.save_intermediate:
             output_dir = self.config.get_output_path('')

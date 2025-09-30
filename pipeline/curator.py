@@ -621,12 +621,25 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
 
         return guide
 
-    def curate_taxonomy(self, llm_analysis: Dict[str, Any]) -> Dict[str, Any]:
-        """Perform complete taxonomy curation from LLM analysis."""
+    def curate_taxonomy(self, llm_analysis: Dict[str, Any], email_data: Dict[str, Any] = None, cluster_data: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Perform complete taxonomy curation from LLM analysis.
+
+        Args:
+            llm_analysis: LLM analysis results with cluster information
+            email_data: Processed or anonymized email data (optional, for real examples)
+            cluster_data: Cluster results with email-to-cluster mappings (optional, for real examples)
+        """
         logger.info("Starting taxonomy curation...")
 
         # Extract rich content from LLM analysis
         rich_taxonomy = self._extract_rich_taxonomy(llm_analysis)
+
+        # Extract real email examples if data is available
+        if email_data and cluster_data:
+            logger.info("Extracting real email examples from clusters...")
+            rich_taxonomy = self._add_real_email_examples(rich_taxonomy, email_data, cluster_data)
+        else:
+            logger.warning("Email/cluster data not provided - using synthetic examples")
 
         # Apply LLM-based consolidation to reduce granular categories
         if self.client:
@@ -887,6 +900,153 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
 
         return examples
 
+
+    def _add_real_email_examples(self, rich_taxonomy: Dict[str, Any], email_data: Dict[str, Any], cluster_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Extract real anonymized email examples from clusters for each category.
+
+        Args:
+            rich_taxonomy: Taxonomy with category definitions and cluster mappings
+            email_data: Processed or anonymized email data with threads
+            cluster_data: Cluster results with email-to-cluster mappings
+
+        Returns:
+            Rich taxonomy enhanced with real email examples
+        """
+        logger.info("Extracting real email examples from clusters...")
+
+        # Build email lookup: index -> email content
+        email_lookup = {}
+        threads = email_data.get('threads', [])
+
+        email_index = 0
+        for thread in threads:
+            for email in thread.get('emails', []):
+                # Only use incoming customer emails
+                if email.get('direction') == 'incoming':
+                    content = email.get('content', '').strip()
+                    if content:
+                        email_lookup[email_index] = {
+                            'content': content,
+                            'subject': thread.get('subject', ''),
+                            'email_id': email.get('id', '')
+                        }
+                email_index += 1
+
+        logger.info(f"Built email lookup with {len(email_lookup)} incoming emails")
+
+        # Get cluster assignments
+        cluster_labels = cluster_data.get('cluster_labels', [])
+
+        # Build cluster -> email indices mapping
+        cluster_to_emails = {}
+        for idx, cluster_id in enumerate(cluster_labels):
+            if cluster_id != -1 and idx in email_lookup:  # Skip noise (-1) and missing emails
+                cluster_id_str = str(cluster_id)
+                if cluster_id_str not in cluster_to_emails:
+                    cluster_to_emails[cluster_id_str] = []
+                cluster_to_emails[cluster_id_str].append(idx)
+
+        logger.info(f"Mapped {len(cluster_to_emails)} clusters to email indices")
+
+        # Extract examples for intent categories
+        for intent_name, intent_data in rich_taxonomy.get('intent_categories', {}).items():
+            clusters = intent_data.get('clusters', [])
+            examples = self._extract_examples_from_clusters(
+                clusters, cluster_to_emails, email_lookup, num_examples=3
+            )
+            if examples:
+                intent_data['real_email_examples'] = examples
+                logger.info(f"Extracted {len(examples)} real examples for intent '{intent_name}'")
+            else:
+                logger.warning(f"No real examples found for intent '{intent_name}' - will use synthetic")
+
+        # Extract examples for sentiment categories
+        for sentiment_name, sentiment_data in rich_taxonomy.get('sentiment_categories', {}).items():
+            clusters = sentiment_data.get('clusters', [])
+            examples = self._extract_examples_from_clusters(
+                clusters, cluster_to_emails, email_lookup, num_examples=3
+            )
+            if examples:
+                sentiment_data['real_email_examples'] = examples
+                logger.info(f"Extracted {len(examples)} real examples for sentiment '{sentiment_name}'")
+            else:
+                logger.warning(f"No real examples found for sentiment '{sentiment_name}' - will use synthetic")
+
+        return rich_taxonomy
+
+    def _extract_examples_from_clusters(self, cluster_ids: List[str], cluster_to_emails: Dict[str, List[int]],
+                                       email_lookup: Dict[int, Dict[str, str]], num_examples: int = 3) -> List[Dict[str, str]]:
+        """
+        Extract diverse, representative email examples from a list of clusters.
+
+        Args:
+            cluster_ids: List of cluster IDs to extract examples from
+            cluster_to_emails: Mapping of cluster ID to email indices
+            email_lookup: Mapping of email index to email data
+            num_examples: Number of examples to extract
+
+        Returns:
+            List of email examples with subject and content
+        """
+        examples = []
+        seen_content_hashes = set()
+
+        # Try to get examples from different clusters for diversity
+        for cluster_id in cluster_ids:
+            cluster_id_str = str(cluster_id)
+            email_indices = cluster_to_emails.get(cluster_id_str, [])
+
+            if not email_indices:
+                continue
+
+            # Try up to 5 emails from this cluster to find diverse examples
+            for idx in email_indices[:5]:
+                email_data = email_lookup.get(idx)
+                if not email_data:
+                    continue
+
+                content = email_data['content']
+
+                # Skip if content is too short or too long
+                if len(content) < 50 or len(content) > 1000:
+                    continue
+
+                # Check for diversity (avoid near-duplicate examples)
+                content_hash = hash(content[:200])  # Hash first 200 chars for similarity check
+                if content_hash in seen_content_hashes:
+                    continue
+
+                # Clean up content for presentation
+                clean_content = self._clean_email_for_example(content)
+
+                examples.append({
+                    'subject': email_data.get('subject', 'No subject'),
+                    'content': clean_content
+                })
+
+                seen_content_hashes.add(content_hash)
+
+                if len(examples) >= num_examples:
+                    return examples
+
+            if len(examples) >= num_examples:
+                break
+
+        return examples
+
+    def _clean_email_for_example(self, content: str) -> str:
+        """Clean email content for use as an example in taxonomy/prompts."""
+        # Remove excessive whitespace
+        lines = [line.strip() for line in content.split('\n') if line.strip()]
+
+        # Limit to first ~300 characters for conciseness
+        cleaned = '\n'.join(lines)
+        if len(cleaned) > 400:
+            # Truncate and add ellipsis
+            cleaned = cleaned[:400].rsplit(' ', 1)[0] + '...'
+
+        return cleaned
 
     def _validate_indicator_uniqueness(self, consolidated_taxonomy: ConsolidatedTaxonomy) -> Dict[str, List[str]]:
         """
@@ -1162,9 +1322,19 @@ CRITICAL: Return ONLY the JSON object. No additional text, explanations, or mark
                 yaml_lines.append(f'      - "{indicator}"')
 
             yaml_lines.append("    examples:")
-            examples = self._generate_clean_examples(intent_name, intent_data.get('sample_indicators', []))
-            for example in examples:
-                yaml_lines.append(f'      - "{example}"')
+            # Use real email examples if available, otherwise generate synthetic
+            real_examples = intent_data.get('real_email_examples', [])
+            if real_examples:
+                for example in real_examples[:3]:
+                    # Format real email examples with subject + snippet
+                    example_text = f"[{example['subject']}] {example['content'][:150]}..."
+                    # Escape quotes in the example text
+                    example_text = example_text.replace('"', '\\"')
+                    yaml_lines.append(f'      - "{example_text}"')
+            else:
+                examples = self._generate_clean_examples(intent_name, intent_data.get('sample_indicators', []))
+                for example in examples:
+                    yaml_lines.append(f'      - "{example}"')
 
             yaml_lines.append("")
 
@@ -1200,10 +1370,19 @@ CRITICAL: Return ONLY the JSON object. No additional text, explanations, or mark
                 yaml_lines.append(f'      - "{indicator}"')
 
             yaml_lines.append("    examples:")
-            # Generate examples from LLM indicators (similar to intent categories)
-            examples = self._generate_clean_examples(sentiment_name, sentiment_data.get('sample_indicators', []))
-            for example in examples:
-                yaml_lines.append(f'      - "{example}"')
+            # Use real email examples if available, otherwise generate synthetic
+            real_examples = sentiment_data.get('real_email_examples', [])
+            if real_examples:
+                for example in real_examples[:3]:
+                    # Format real email examples with subject + snippet
+                    example_text = f"[{example['subject']}] {example['content'][:150]}..."
+                    # Escape quotes in the example text
+                    example_text = example_text.replace('"', '\\"')
+                    yaml_lines.append(f'      - "{example_text}"')
+            else:
+                examples = self._generate_clean_examples(sentiment_name, sentiment_data.get('sample_indicators', []))
+                for example in examples:
+                    yaml_lines.append(f'      - "{example}"')
 
             yaml_lines.append("")
 
@@ -1415,21 +1594,49 @@ Respond with ONLY a valid JSON object in this exact format:
 
 """
 
-        # Add a few examples from each major category
+        # Add real examples from each major category if available
         example_count = 0
         for intent_name, intent_data in list(intent_categories.items())[:2]:  # Top 2 intents
-            prompt += f"""**{intent_name} Example**:
+            real_examples = intent_data.get('real_email_examples', [])
+
+            if real_examples and len(real_examples) > 0:
+                # Use first real example
+                example = real_examples[0]
+                subject = example.get('subject', 'No subject')
+                body = example.get('content', 'No content')[:300]  # Limit body length
+
+                prompt += f"""**{intent_name} Example** (Real Email):
 ```
-Subject: Banking Information Update
-Body: Please update your records with our new banking details for future payments.
+Subject: {subject}
+Body: {body}
+
+Classification:
+{{
+    "intent": "{intent_name}",
+    "sentiment": "Professional",
+    "confidence": "high",
+    "reasoning": "Email demonstrates clear {intent_name.lower()} intent with professional tone",
+    "key_phrases": {intent_data.get('key_indicators', [''])[:3]},
+    "business_priority": "medium",
+    "suggested_action": "Review and respond according to category guidelines"
+}}
+```
+
+"""
+            else:
+                # Fallback to synthetic example
+                prompt += f"""**{intent_name} Example**:
+```
+Subject: Regarding Account Update
+Body: Please update your records with our new contact information for future correspondence.
 
 Classification:
 {{
     "intent": "{intent_name}",
     "sentiment": "Cooperative",
     "confidence": "high",
-    "reasoning": "Clear request to update banking information with polite tone",
-    "key_phrases": ["please update", "banking details", "future payments"],
+    "reasoning": "Clear {intent_name.lower()} request with polite tone",
+    "key_phrases": {intent_data.get('key_indicators', [''])[:3]},
     "business_priority": "medium",
     "suggested_action": "Update customer records and acknowledge receipt"
 }}
