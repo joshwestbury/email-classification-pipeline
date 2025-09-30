@@ -440,6 +440,10 @@ class TaxonomyCurator:
                 'clusters': self._collect_clusters_from_merged_categories(
                     intent_cat.merged_categories,
                     original_rich_taxonomy['intent_categories']
+                ),
+                'real_email_examples': self._collect_real_examples_from_merged_categories(
+                    intent_cat.merged_categories,
+                    original_rich_taxonomy['intent_categories']
                 )
             }
 
@@ -456,6 +460,10 @@ class TaxonomyCurator:
                     original_rich_taxonomy['sentiment_categories']
                 ),
                 'clusters': self._collect_clusters_from_merged_categories(
+                    sentiment_cat.merged_categories,
+                    original_rich_taxonomy['sentiment_categories']
+                ),
+                'real_email_examples': self._collect_real_examples_from_merged_categories(
                     sentiment_cat.merged_categories,
                     original_rich_taxonomy['sentiment_categories']
                 )
@@ -478,6 +486,27 @@ class TaxonomyCurator:
             if category_name in original_categories:
                 clusters.extend(original_categories[category_name].get('clusters', []))
         return list(set(clusters))  # Remove duplicates
+
+    def _collect_real_examples_from_merged_categories(self, merged_categories: list, original_categories: dict) -> list:
+        """Collect real email examples from merged categories."""
+        all_examples = []
+        seen_content_hashes = set()
+
+        for category_name in merged_categories:
+            if category_name in original_categories:
+                examples = original_categories[category_name].get('real_email_examples', [])
+                for example in examples:
+                    # Deduplicate using content hash
+                    content_hash = hash(example.get('content', '')[:200])
+                    if content_hash not in seen_content_hashes:
+                        all_examples.append(example)
+                        seen_content_hashes.add(content_hash)
+
+                    # Limit to 3 most diverse examples
+                    if len(all_examples) >= 3:
+                        return all_examples
+
+        return all_examples
 
     def generate_taxonomy_yaml(self, consolidated_taxonomy: Dict[str, Any], analysis_summary: Dict[str, Any]) -> Dict[str, Any]:
         """Generate the final taxonomy.yaml structure."""
