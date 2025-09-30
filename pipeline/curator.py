@@ -945,22 +945,25 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
         logger.info("Extracting real email examples from clusters...")
 
         # Build email lookup: index -> email content
+        # IMPORTANT: Index must match cluster_labels array (which only contains incoming emails)
         email_lookup = {}
         threads = email_data.get('threads', [])
 
-        email_index = 0
+        incoming_email_index = 0
         for thread in threads:
             for email in thread.get('emails', []):
                 # Only use incoming customer emails
                 if email.get('direction') == 'incoming':
                     content = email.get('content', '').strip()
                     if content:
-                        email_lookup[email_index] = {
+                        email_lookup[incoming_email_index] = {
                             'content': content,
                             'subject': thread.get('subject', ''),
                             'email_id': email.get('id', '')
                         }
-                email_index += 1
+                    # Increment for ALL incoming emails (even those without content)
+                    # to match cluster_labels indexing
+                    incoming_email_index += 1
 
         logger.info(f"Built email lookup with {len(email_lookup)} incoming emails")
 
