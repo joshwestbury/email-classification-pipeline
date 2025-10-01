@@ -94,16 +94,18 @@ class TaxonomyPipeline:
         analysis_results = self._run_llm_analysis()
         self.state['llm_analysis'] = analysis_results
 
-        # Step 6: Taxonomy Curation
+        # Step 6: Taxonomy Curation (includes system prompt generation)
         self.logger.info("Step 6: Curating final taxonomy...")
         curation_results = self._run_taxonomy_curation()
         self.state['taxonomy'] = curation_results
 
-        # Step 7: System Prompt Generation
-        if self.config.generate_prompt:
-            self.logger.info("Step 7: Generating system prompt from taxonomy...")
-            prompt_results = self._run_prompt_generation()
-            self.state['system_prompt'] = prompt_results
+        # NOTE: System prompt generation is now handled by curator.py in Step 6
+        # The old PromptGenerator (Step 7) has been deprecated because it contained
+        # hardcoded category names which violated organic taxonomy discovery principles
+        # if self.config.generate_prompt:
+        #     self.logger.info("Step 7: Generating system prompt from taxonomy...")
+        #     prompt_results = self._run_prompt_generation()
+        #     self.state['system_prompt'] = prompt_results
 
         self.logger.info("Pipeline completed successfully!")
         summary = self._generate_summary()

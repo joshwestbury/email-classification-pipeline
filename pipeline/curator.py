@@ -1340,6 +1340,13 @@ CRITICAL: Return ONLY the JSON object. No additional text, explanations, or mark
     def _generate_formatted_yaml(self, intent_categories: Dict[str, Any], sentiment_categories: Dict[str, Any], analysis_summary: Dict[str, Any]) -> str:
         """Generate clean, formatted YAML string matching reference taxonomy structure."""
 
+        # Helper function for YAML string escaping (defined once, used throughout)
+        def escape_yaml_string(s):
+            """Escape string for YAML - handle quotes and backslashes."""
+            if s is None:
+                return ""
+            return str(s).replace('\\', '\\\\').replace('"', '\\"')
+
         total_emails = analysis_summary.get('total_emails_in_analyzed_clusters', 0)
         clusters_analyzed = analysis_summary.get('clusters_analyzed', 0)
         coverage_pct = analysis_summary.get('coverage_percentage', 0)
@@ -1369,38 +1376,43 @@ CRITICAL: Return ONLY the JSON object. No additional text, explanations, or mark
         # Add each intent category
         for intent_name, intent_data in intent_categories.items():
             snake_case_name = self._to_snake_case(intent_name)
-            coverage_pct = (intent_data['total_emails'] / total_emails) * 100
+
+            # Safe calculation of coverage percentage
+            total_category_emails = intent_data.get('total_emails', 0)
+            coverage_pct = (total_category_emails / total_emails * 100) if total_emails > 0 else 0
 
             yaml_lines.extend([
                 f"  {snake_case_name}:",
-                f'    display_name: "{intent_name}"',
-                f'    description: "{intent_data["definition"]}"',
-                f'    business_value: "{intent_data.get("business_relevance", "Track customer engagement patterns")}"',
-                f'    coverage: "{coverage_pct:.1f}%"  # {intent_data["total_emails"]} emails',
+                f'    display_name: "{escape_yaml_string(intent_name)}"',
+                f'    description: "{escape_yaml_string(intent_data.get("definition", ""))}"',
+                f'    business_value: "{escape_yaml_string(intent_data.get("business_relevance", "Track customer engagement patterns"))}"',
+                f'    coverage: "{coverage_pct:.1f}%"  # {total_category_emails} emails',
                 "    decision_rules:"
             ])
 
             for rule in intent_data.get('decision_rules', []):
-                yaml_lines.append(f'      - "{rule}"')
+                yaml_lines.append(f'      - "{escape_yaml_string(rule)}"')
 
             yaml_lines.append("    key_indicators:")
-            for indicator in intent_data.get('sample_indicators', []):
-                yaml_lines.append(f'      - "{indicator}"')
+            # Support both key_indicators (from consolidation) and sample_indicators (from granular taxonomy)
+            indicators = intent_data.get('key_indicators', intent_data.get('sample_indicators', []))
+            for indicator in indicators:
+                yaml_lines.append(f'      - "{escape_yaml_string(indicator)}"')
 
             yaml_lines.append("    examples:")
             # Use real email examples if available, otherwise generate synthetic
             real_examples = intent_data.get('real_email_examples', [])
             if real_examples:
                 for example in real_examples[:3]:
-                    # Format real email examples with subject + snippet
-                    example_text = f"[{example['subject']}] {example['content'][:150]}..."
-                    # Escape quotes in the example text
-                    example_text = example_text.replace('"', '\\"')
-                    yaml_lines.append(f'      - "{example_text}"')
+                    # Format real email examples with subject + snippet (truncate to 150 chars)
+                    subject = example.get('subject', '') or ''
+                    content = (example.get('content', '') or '')[:150]
+                    example_text = f"[{subject}] {content}"
+                    yaml_lines.append(f'      - "{escape_yaml_string(example_text)}"')
             else:
                 examples = self._generate_clean_examples(intent_name, intent_data.get('sample_indicators', []))
                 for example in examples:
-                    yaml_lines.append(f'      - "{example}"')
+                    yaml_lines.append(f'      - "{escape_yaml_string(example)}"')
 
             yaml_lines.append("")
 
@@ -1415,40 +1427,44 @@ CRITICAL: Return ONLY the JSON object. No additional text, explanations, or mark
         # Add each sentiment category
         for sentiment_name, sentiment_data in sentiment_categories.items():
             snake_case_name = self._to_snake_case(sentiment_name)
-            coverage_pct = (sentiment_data['total_emails'] / total_emails) * 100
+
+            # Safe calculation of coverage percentage
+            total_category_emails = sentiment_data.get('total_emails', 0)
+            coverage_pct = (total_category_emails / total_emails * 100) if total_emails > 0 else 0
 
             yaml_lines.extend([
                 f"  {snake_case_name}:",
-                f'    display_name: "{sentiment_name}"',
-                f'    description: "{sentiment_data["definition"]}"',
-                f'    business_value: "{sentiment_data.get("business_relevance", "Track customer sentiment patterns")}"',
-                f'    coverage: "{coverage_pct:.1f}%"  # {sentiment_data["total_emails"]} emails',
+                f'    display_name: "{escape_yaml_string(sentiment_name)}"',
+                f'    description: "{escape_yaml_string(sentiment_data.get("definition", ""))}"',
+                f'    business_value: "{escape_yaml_string(sentiment_data.get("business_relevance", "Track customer sentiment patterns"))}"',
+                f'    coverage: "{coverage_pct:.1f}%"  # {total_category_emails} emails',
                 "    decision_rules:"
             ])
 
             # Use LLM-derived decision rules, not hardcoded ones
             for rule in sentiment_data.get('decision_rules', []):
-                yaml_lines.append(f'      - "{rule}"')
+                yaml_lines.append(f'      - "{escape_yaml_string(rule)}"')
 
             yaml_lines.append("    key_indicators:")
-            # Use LLM-derived indicators
-            for indicator in sentiment_data.get('sample_indicators', []):
-                yaml_lines.append(f'      - "{indicator}"')
+            # Support both key_indicators (from consolidation) and sample_indicators (from granular taxonomy)
+            indicators = sentiment_data.get('key_indicators', sentiment_data.get('sample_indicators', []))
+            for indicator in indicators:
+                yaml_lines.append(f'      - "{escape_yaml_string(indicator)}"')
 
             yaml_lines.append("    examples:")
             # Use real email examples if available, otherwise generate synthetic
             real_examples = sentiment_data.get('real_email_examples', [])
             if real_examples:
                 for example in real_examples[:3]:
-                    # Format real email examples with subject + snippet
-                    example_text = f"[{example['subject']}] {example['content'][:150]}..."
-                    # Escape quotes in the example text
-                    example_text = example_text.replace('"', '\\"')
-                    yaml_lines.append(f'      - "{example_text}"')
+                    # Format real email examples with subject + snippet (truncate to 150 chars)
+                    subject = example.get('subject', '') or ''
+                    content = (example.get('content', '') or '')[:150]
+                    example_text = f"[{subject}] {content}"
+                    yaml_lines.append(f'      - "{escape_yaml_string(example_text)}"')
             else:
                 examples = self._generate_clean_examples(sentiment_name, sentiment_data.get('sample_indicators', []))
                 for example in examples:
-                    yaml_lines.append(f'      - "{example}"')
+                    yaml_lines.append(f'      - "{escape_yaml_string(example)}"')
 
             yaml_lines.append("")
 
@@ -1552,6 +1568,14 @@ CRITICAL: Return ONLY the JSON object. No additional text, explanations, or mark
 
 You are an expert email classifier for collections operations. Your task is to analyze incoming customer emails and classify them by INTENT and SENTIMENT to help collections teams respond appropriately.
 
+## CRITICAL INSTRUCTIONS
+
+1. You MUST classify every email with exactly ONE intent and exactly ONE sentiment
+2. Base your classification ONLY on the email content, not assumptions
+3. Use the provided decision rules and key indicators systematically
+4. When uncertain, apply the disambiguation rules provided below
+5. Provide confidence scores and reasoning to indicate classification certainty
+
 ## CLASSIFICATION OVERVIEW
 
 **INTENT**: What the customer wants to achieve (their purpose/goal)
@@ -1576,8 +1600,11 @@ You must classify each email with exactly ONE intent and ONE sentiment category.
             for rule in intent_data.get('decision_rules', [])[:3]:  # Top 3 rules
                 prompt += f"- {rule}\n"
 
+            # Support both key_indicators (from consolidation) and sample_indicators (from granular taxonomy)
+            indicators = intent_data.get('key_indicators', intent_data.get('sample_indicators', []))
+
             prompt += f"""
-**Key indicators**: {', '.join(f'"{ind}"' for ind in intent_data.get('key_indicators', [])[:4])}
+**Key indicators**: {', '.join(f'"{ind}"' for ind in indicators[:5])}
 
 **Business impact**: {intent_data.get('business_relevance', 'Standard processing')}
 
@@ -1601,61 +1628,122 @@ You must classify each email with exactly ONE intent and ONE sentiment category.
             for rule in sentiment_data.get('decision_rules', [])[:3]:  # Top 3 rules
                 prompt += f"- {rule}\n"
 
+            # Support both key_indicators (from consolidation) and sample_indicators (from granular taxonomy)
+            indicators = sentiment_data.get('key_indicators', sentiment_data.get('sample_indicators', []))
+
             prompt += f"""
-**Key indicators**: {', '.join(f'"{ind}"' for ind in sentiment_data.get('key_indicators', [])[:4])}
+**Key indicators**: {', '.join(f'"{ind}"' for ind in indicators[:5])}
 
 **Collections impact**: {sentiment_data.get('business_relevance', 'Standard handling')}
 
 """
 
-        # Add classification instructions and output format
-        prompt += f"""
-## CLASSIFICATION PROCESS
+        # Add classification methodology
+        prompt += """
+## CLASSIFICATION METHODOLOGY
 
-1. **Read the complete email** including subject line and body content
-2. **Identify the primary intent** - what does the customer want?
-3. **Determine the sentiment** - how are they communicating?
-4. **Apply business context** - consider collections operational needs
-5. **Choose the most specific applicable categories**
+Follow this step-by-step process for every email:
 
+### Step 1: Initial Read
+- Read the entire email including subject line and body
+- Understand the full context before making decisions
+
+### Step 2: Intent Analysis
+- Identify the primary ask or purpose of the email
+- Look for key indicator phrases from the categories above
+- Apply decision rules in order of specificity
+- If multiple intents are present, choose the one requiring immediate action
+
+### Step 3: Sentiment Analysis
+- Assess overall emotional tone and cooperation level
+- Look for cooperation indicators (offers information, polite language)
+- Check for frustration or urgency markers (repetition, exclamation marks, time pressure)
+- Consider how the sentiment affects required response approach
+
+### Step 4: Entity Extraction
+Scan the email for relevant business entities:
+- Invoice numbers (formats: INV-XXXX, #XXXXX, Invoice XXXX)
+- Payment amounts ($X,XXX.XX or similar currency formats)
+- Dates (various formats: YYYY-MM-DD, MM/DD/YYYY, "next week", etc.)
+- Account numbers or customer IDs
+- Contact names and company names
+
+### Step 5: Confidence Assessment
+Assign confidence based on indicator clarity:
+- **High (0.8-1.0)**: Multiple clear indicators present, unambiguous classification
+- **Medium (0.5-0.79)**: Some indicators present with minor ambiguity
+- **Low (0.0-0.49)**: Weak or conflicting indicators - flag for human review
+
+"""
+
+        # Add output format
+        prompt += """
 ## OUTPUT FORMAT
 
 Respond with ONLY a valid JSON object in this exact format:
 
 ```json
-{{
+{
     "intent": "Exact Intent Category Name",
     "sentiment": "Exact Sentiment Category Name",
-    "confidence": "high|medium|low",
+    "confidence": 0.85,
     "reasoning": "Brief 1-2 sentence explanation of classification decision",
-    "key_phrases": ["phrase1", "phrase2", "phrase3"],
+    "key_phrases": ["actual phrase from email", "another phrase", "third phrase"],
+    "extracted_entities": {
+        "invoice_numbers": ["INV-123"],
+        "amounts": ["$1,234.56"],
+        "dates": ["2024-01-15"],
+        "contact_names": ["John Doe"]
+    },
     "business_priority": "high|medium|low",
-    "suggested_action": "Recommended next step for collections team"
-}}
+    "suggested_action": "Recommended next step for collections team",
+    "requires_human_review": false,
+    "review_reason": "Only if requires_human_review is true"
+}
 ```
 
-## CLASSIFICATION GUIDELINES
+**Important Output Notes**:
+- `confidence` must be a decimal number between 0.0 and 1.0, not a string
+- `key_phrases` must contain actual phrases extracted from the email, not generic placeholders
+- `extracted_entities` fields should be empty arrays if no entities found
+- Set `requires_human_review: true` if confidence < 0.5 for either classification
 
-**Intent Priority Rules**:
-- Focus on the customer's PRIMARY purpose, not secondary mentions
-- When multiple intents are present, choose the one requiring immediate action
-- Consider the business impact of misclassification
+"""
 
-**Sentiment Priority Rules**:
-- Prioritize emotionally significant sentiments (frustrated > cooperative > neutral)
-- Consider how the sentiment affects required response approach
-- Look for subtle emotional indicators beyond obvious language
+        # Add disambiguation rules (generic, no hardcoded categories)
+        prompt += """
+## DISAMBIGUATION RULES
 
-**Quality Standards**:
-- **High confidence**: Clear indicators, unambiguous classification
-- **Medium confidence**: Some indicators present, minor ambiguity
-- **Low confidence**: Weak indicators, significant uncertainty
+### When Multiple Intents Appear:
+1. **Primary vs Secondary**: Focus on the customer's PRIMARY purpose, not secondary mentions
+2. **Specificity**: Always choose the most specific applicable category
+3. **Urgency**: When multiple valid intents exist, prioritize the one requiring immediate action
+4. **Business Impact**: Consider which misclassification would have greater operational impact
 
-**Business Priority Guidelines**:
-- **High**: Urgent issues, frustrated customers, payment problems
-- **Medium**: Standard requests, cooperative customers, routine updates
-- **Low**: Informational only, no immediate action required
+### When Sentiment is Mixed:
+1. **Emotional Hierarchy**: Prioritize emotionally significant sentiments over neutral ones
+   - Strong negative emotions (frustrated, angry) > cooperative > neutral
+2. **Tone vs Content**: If someone provides helpful information but expresses frustration, the frustration takes precedence
+3. **Neutral Default**: For purely factual communications with no emotional indicators, choose the most neutral/administrative sentiment
 
+### Special Cases to Consider:
+- **Out of Office/Automated Replies**: Classify based on informational intent with neutral sentiment
+- **Thank You Only Emails**: Classify as acknowledgment/information with cooperative sentiment
+- **Forwarded Emails without Comment**: Analyze the forwarded content, not the act of forwarding
+- **Multiple Questions**: Focus on the primary or most urgent question
+- **Very Short Emails (<20 words)**: Reduce confidence by 0.2 due to limited context
+- **Conflicting Indicators**: Reduce confidence by 0.3 and document the conflict in reasoning
+
+### Confidence Adjustment Rules:
+- Reduce confidence by 0.2 if email is very short (<20 words)
+- Reduce confidence by 0.3 if multiple valid categories apply equally
+- Set maximum confidence to 0.7 if no key indicators are present
+- Always flag for review (`requires_human_review: true`) if confidence < 0.5
+
+"""
+
+        # Add examples section
+        prompt += """
 ## EXAMPLES
 
 """
@@ -1668,43 +1756,34 @@ Respond with ONLY a valid JSON object in this exact format:
             if real_examples and len(real_examples) > 0:
                 # Use first real example
                 example = real_examples[0]
-                subject = example.get('subject', 'No subject')
+                subject = example.get('subject', '')
                 body = example.get('content', 'No content')[:300]  # Limit body length
 
-                prompt += f"""**{intent_name} Example** (Real Email):
+                # Get key indicators for this category (support both field names)
+                key_indicators = intent_data.get('key_indicators', intent_data.get('sample_indicators', []))[:3]
+                key_phrases_json = json.dumps(key_indicators) if key_indicators else '[]'
+
+                prompt += f"""**Example {example_count + 1}: {intent_name}**
 ```
-Subject: {subject}
+Subject: {subject if subject else '(no subject)'}
 Body: {body}
 
 Classification:
 {{
     "intent": "{intent_name}",
-    "sentiment": "Professional",
-    "confidence": "high",
-    "reasoning": "Email demonstrates clear {intent_name.lower()} intent with professional tone",
-    "key_phrases": {intent_data.get('key_indicators', [''])[:3]},
+    "sentiment": "(appropriate sentiment from categories above)",
+    "confidence": 0.85,
+    "reasoning": "Email demonstrates {intent_name.lower()} based on key indicators and primary purpose",
+    "key_phrases": {key_phrases_json},
+    "extracted_entities": {{
+        "invoice_numbers": [],
+        "amounts": [],
+        "dates": [],
+        "contact_names": []
+    }},
     "business_priority": "medium",
-    "suggested_action": "Review and respond according to category guidelines"
-}}
-```
-
-"""
-            else:
-                # Fallback to synthetic example
-                prompt += f"""**{intent_name} Example**:
-```
-Subject: Regarding Account Update
-Body: Please update your records with our new contact information for future correspondence.
-
-Classification:
-{{
-    "intent": "{intent_name}",
-    "sentiment": "Cooperative",
-    "confidence": "high",
-    "reasoning": "Clear {intent_name.lower()} request with polite tone",
-    "key_phrases": {intent_data.get('key_indicators', [''])[:3]},
-    "business_priority": "medium",
-    "suggested_action": "Update customer records and acknowledge receipt"
+    "suggested_action": "Review and respond according to category guidelines",
+    "requires_human_review": false
 }}
 ```
 
@@ -1712,13 +1791,36 @@ Classification:
             example_count += 1
 
         prompt += f"""
+## BUSINESS PRIORITY GUIDELINES
+
+Assign business priority based on these factors:
+
+**High Priority**:
+- Emails with frustrated or escalated sentiment
+- Payment disputes or urgent payment issues
+- Time-sensitive matters (deadlines mentioned)
+- Multiple follow-ups on same issue
+
+**Medium Priority**:
+- Standard requests from cooperative customers
+- Routine updates or confirmations
+- Non-urgent information requests
+
+**Low Priority**:
+- Purely informational emails requiring no action
+- Acknowledgments or thank-you messages
+- Out-of-office or automated replies
+
 ## CRITICAL REMINDERS
 
-- Respond with ONLY the JSON object - no additional text or formatting
-- Use exact category names as defined above
-- Ensure JSON is valid and properly formatted
+- Respond with ONLY the JSON object - no additional text, markdown, or formatting outside the JSON
+- Use exact category names as defined in the categories sections above
+- Ensure JSON is valid and properly formatted (use decimal numbers for confidence, not strings)
+- Extract actual phrases from the email for `key_phrases`, not generic placeholders
+- Base all decisions on the email content, not assumptions about the customer
+- When uncertain (confidence < 0.5), always set `requires_human_review: true`
 - Consider collections operational context in your decisions
-- When uncertain, prioritize business value over perfect categorization
+- Prioritize business value and operational efficiency in edge cases
 
 ---
 
