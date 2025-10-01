@@ -207,17 +207,6 @@ class LLMAnalyzer:
         - Cluster Size: {cluster_size} incoming customer emails
         - Percentage of Incoming Emails: {cluster_percentage:.1f}%
 
-        Pattern-Based Sentiment Analysis (Pre-Analysis):
-        - Dominant Sentiment: {sentiment_analysis.get('dominant_sentiment', 'unknown')}
-        - Average Confidence: {sentiment_analysis.get('avg_confidence', 0.0):.2f}
-        - Sentiment Distribution: {sentiment_analysis.get('distribution', {})}
-        - High-Confidence Detections: {sentiment_analysis.get('high_confidence_sentiments', [])}
-        - Minority Sentiments (>0.15 confidence): {sentiment_analysis.get('minority_sentiments', [])}
-        - Sample Sentiment Results: {sentiment_analysis.get('sample_results', [])}
-
-        Pattern Analysis Notes:
-        The pre-analysis data above shows automated pattern detection results. Use this as one input among many, but let the actual email content guide your categorization. The goal is authentic category discovery based on what customers are actually communicating.
-
         Your task is to:
         1. Identify the natural intent that emerges from these customer emails
         2. Determine the authentic emotional tone present in the communications
@@ -285,14 +274,6 @@ class LLMAnalyzer:
         - Consider minority emotional indicators if they require different business handling
         - Intent and sentiment categories should emerge naturally from the email content
         - Category names should be 1-3 words, clear and actionable
-
-        ## SENTIMENT ANALYSIS CONSIDERATIONS
-
-        The pre-analysis sentiment data above shows pattern-based detection. Consider:
-        - High-confidence minority sentiments may be more significant than dominant patterns
-        - Customers expressing negative emotions need different handling even if they're a minority
-        - True emotional neutrality is rare - look for subtle emotional indicators
-        - Business communications can still carry emotional undertones
 
         IMPORTANT GUIDELINES:
         - Avoid generic terms like "Administrative" or "Information Request"

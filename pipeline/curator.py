@@ -11,6 +11,7 @@ from typing import Dict, List, Any, Tuple
 from pathlib import Path
 import logging
 import re
+from datetime import datetime
 from sentence_transformers import SentenceTransformer
 import numpy as np
 import os
@@ -54,33 +55,7 @@ class TaxonomyCurator:
         else:
             self.client = OpenAI(api_key=api_key)
 
-        self.curation_rules = {
-            # Intent consolidation rules - More granular categories
-            'intent_consolidation': {
-                'Payment Status Inquiry': ['payment status', 'payment inquiry', 'payment question'],
-                'Payment Promise': ['payment promise', 'payment commitment', 'will pay'],
-                'Hardship Communication': ['hardship', 'financial difficulty', 'cannot pay'],
-                'Dispute Resolution': ['dispute', 'challenge', 'disagree', 'error'],
-                'Invoice Documentation': ['invoice request', 'documentation', 'w9', 'receipt'],
-                'Account Information Update': ['account update', 'information update', 'contact change'],
-                'Payment Method Inquiry': ['payment method', 'payment option', 'how to pay'],
-                'Settlement Negotiation': ['settlement', 'payment arrangement', 'negotiate'],
-                'Acknowledgment': ['acknowledge', 'received', 'confirm receipt'],
-                'Third Party Authorization': ['lawyer', 'attorney', 'representative']
-            },
-            # Sentiment consolidation rules - More emotional granularity
-            'sentiment_consolidation': {
-                'Apologetic': ['apologetic', 'sorry', 'regret', 'apologize'],
-                'Frustrated': ['frustrated', 'angry', 'upset', 'dissatisfied'],
-                'Cooperative': ['cooperative', 'willing', 'helpful', 'collaborative'],
-                'Defensive': ['defensive', 'excuse', 'not my fault', 'justify'],
-                'Urgent': ['urgent', 'emergency', 'asap', 'immediate'],
-                'Professional': ['professional', 'formal', 'business', 'neutral'],
-                'Confused': ['confused', 'unclear', 'don\'t understand', 'clarification'],
-                'Grateful': ['grateful', 'thank', 'appreciate', 'thankful'],
-                'Desperate': ['desperate', 'pleading', 'help', 'severe']
-            }
-        }
+        # Removed hardcoded consolidation seed maps - using embedding-based consolidation instead
 
         # Initialize sentence transformer for semantic similarity
         self.similarity_model = None
@@ -108,59 +83,8 @@ class TaxonomyCurator:
 
         return float(similarity)
 
-    def _has_distinct_business_value(self, cat1_name: str, cat2_name: str) -> bool:
-        """Check if two categories have distinct business value that should be preserved."""
-        cat1_lower = cat1_name.lower()
-        cat2_lower = cat2_name.lower()
-
-        # Emotional sentiment categories that must remain distinct
-        emotional_distinctions = [
-            ('apologetic', 'frustrated'),    # Very different emotional states
-            ('apologetic', 'defensive'),     # Different emotional responses
-            ('frustrated', 'cooperative'),   # Opposite emotional states
-            ('frustrated', 'grateful'),      # Opposite emotional states
-            ('defensive', 'cooperative'),    # Different customer attitudes
-            ('urgent', 'apologetic'),        # Different emotional urgency
-            ('desperate', 'professional'),   # Very different emotional states
-            ('confused', 'defensive'),       # Different emotional responses
-            ('grateful', 'desperate'),       # Different emotional states
-        ]
-
-        # Business intent keywords that should remain separate
-        intent_distinctions = [
-            ('payment', 'invoice'),          # Payment vs Invoice management are different
-            ('payment', 'dispute'),          # Payment vs Dispute handling are different
-            ('invoice', 'dispute'),          # Invoice vs Dispute are different
-            ('inquiry', 'promise'),          # Inquiry vs Promise are different actions
-            ('hardship', 'settlement'),      # Hardship vs Settlement are different situations
-            ('documentation', 'status'),     # Documentation vs Status requests are different
-            ('acknowledgment', 'authorization'), # Different types of communication
-        ]
-
-        # Check emotional distinctions first (most important for sentiment)
-        for emotion1, emotion2 in emotional_distinctions:
-            if ((emotion1 in cat1_lower and emotion2 in cat2_lower) or
-                (emotion2 in cat1_lower and emotion1 in cat2_lower)):
-                logger.debug(f"Preserving distinct emotional states: '{cat1_name}' vs '{cat2_name}'")
-                return True
-
-        # Check business intent distinctions
-        for intent1, intent2 in intent_distinctions:
-            if ((intent1 in cat1_lower and intent2 in cat2_lower) or
-                (intent2 in cat1_lower and intent1 in cat2_lower)):
-                logger.debug(f"Preserving distinct business intents: '{cat1_name}' vs '{cat2_name}'")
-                return True
-
-        # Special case: "information update" variants can still be merged
-        info_update_variants = ['information update', 'account information', 'update notification']
-        cat1_has_info_update = any(variant in cat1_lower for variant in info_update_variants)
-        cat2_has_info_update = any(variant in cat2_lower for variant in info_update_variants)
-
-        if cat1_has_info_update and cat2_has_info_update:
-            logger.debug(f"Both categories are information update variants: '{cat1_name}' and '{cat2_name}' - allowing merge")
-            return False  # Allow merging of information update variants
-
-        return False
+    # Removed _has_distinct_business_value() - no longer using hardcoded category distinctions
+    # Semantic similarity alone determines merging decisions
 
     def _merge_similar_categories(self, categories: Dict[str, Any], threshold: float = None) -> Dict[str, Any]:
         """Merge categories with high semantic similarity, preserving distinct business value."""
@@ -192,14 +116,6 @@ class TaxonomyCurator:
                     continue
 
                 logger.debug(f"  Comparing '{category1}' with '{category2}'")
-
-                # Check if categories have distinct business value
-                has_distinct_value = self._has_distinct_business_value(category1, category2)
-                logger.debug(f"    Business value check: {has_distinct_value} (True=distinct, False=can merge)")
-
-                if has_distinct_value:
-                    logger.debug(f"    SKIPPING: Preserving distinct business value between '{category1}' and '{category2}'")
-                    continue
 
                 # Calculate similarity between descriptions
                 desc1 = categories[category1].get('definition', '')
@@ -255,166 +171,11 @@ class TaxonomyCurator:
         logger.info(f"Merged {len(categories)} categories into {len(merged_categories)} categories")
         return merged_categories
 
-    def _apply_business_consolidation_rules(self, categories: Dict[str, Any]) -> Dict[str, Any]:
-        """Apply business-specific consolidation rules and patterns."""
-        logger.info("Applying business consolidation rules...")
+    # Removed _apply_business_consolidation_rules(), _create_consolidated_definition(), and _get_business_relevance()
+    # These methods contained hardcoded category names and are replaced by LLM-based consolidation
 
-        # Pattern-based consolidation rules - only merge truly duplicate administrative patterns
-        consolidation_patterns = {
-            'Administrative Update': [
-                r'^administrative.*update.*and.*inquiry$',
-                r'^administrative.*update.*and.*confirmation$',
-                r'^administrative.*update.*request$',
-                r'^administrative.*communication$',
-                r'^contact.*information.*update$'
-            ]
-            # Removed broader patterns to preserve payment and invoice distinctions
-        }
-
-        # Group categories by patterns
-        pattern_groups = {}
-        unmatched_categories = {}
-
-        for category_name, category_data in categories.items():
-            matched = False
-            category_lower = category_name.lower()
-
-            for target_name, patterns in consolidation_patterns.items():
-                for pattern in patterns:
-                    if re.search(pattern, category_lower):
-                        if target_name not in pattern_groups:
-                            pattern_groups[target_name] = []
-                        pattern_groups[target_name].append((category_name, category_data))
-                        matched = True
-                        break
-                if matched:
-                    break
-
-            if not matched:
-                unmatched_categories[category_name] = category_data
-
-        # Merge pattern groups
-        consolidated_categories = {}
-
-        for target_name, group_categories in pattern_groups.items():
-            if len(group_categories) == 1:
-                # Only one category in this pattern, keep original name
-                orig_name, orig_data = group_categories[0]
-                consolidated_categories[orig_name] = orig_data
-            else:
-                # Multiple categories, merge them
-                logger.info(f"Consolidating {len(group_categories)} categories into '{target_name}'")
-
-                merged_data = {
-                    'definition': self._create_consolidated_definition(target_name, group_categories),
-                    'clusters': [],
-                    'total_emails': 0,
-                    'sample_indicators': [],
-                    'decision_rules': [],
-                    'business_relevance': self._get_business_relevance(target_name)
-                }
-
-                for category_name, category_data in group_categories:
-                    merged_data['clusters'].extend(category_data.get('clusters', []))
-                    merged_data['total_emails'] += category_data.get('total_emails', 0)
-                    merged_data['sample_indicators'].extend(category_data.get('sample_indicators', []))
-                    merged_data['decision_rules'].extend(category_data.get('decision_rules', []))
-
-                # Deduplicate lists
-                merged_data['sample_indicators'] = list(set(merged_data['sample_indicators']))[:5]  # Limit to 5
-                merged_data['decision_rules'] = list(set(merged_data['decision_rules']))[:5]  # Limit to 5
-
-                consolidated_categories[target_name] = merged_data
-
-        # Add unmatched categories
-        consolidated_categories.update(unmatched_categories)
-
-        # Ensure minimum category diversity (at least 3 categories for business value)
-        if len(consolidated_categories) < 3:
-            logger.warning(f"Only {len(consolidated_categories)} categories after consolidation. Consider lowering similarity threshold.")
-
-        return consolidated_categories
-
-    def _create_consolidated_definition(self, target_name: str, group_categories: List[Tuple[str, Dict]]) -> str:
-        """Create a consolidated definition for merged categories."""
-        definitions = {
-            'Administrative Update': 'Customer communications focused on updating contact information, confirming receipt of documents, and addressing routine administrative matters related to billing and account management.',
-            'Payment Processing': 'Customer inquiries and communications related to payment status, payment methods, and payment processing confirmation.',
-            'Invoice Management': 'Customer requests for invoice documentation, billing clarifications, and follow-up communications regarding specific invoices or charges.'
-        }
-        return definitions.get(target_name, f'Consolidated category for {target_name.lower()} related communications.')
-
-    def _get_business_relevance(self, category_name: str) -> str:
-        """Get business relevance description for consolidated categories."""
-        relevance = {
-            'Administrative Update': 'Ensures accurate customer records and smooth administrative processes, reducing billing errors and miscommunications.',
-            'Payment Processing': 'Tracks payment-related inquiries to improve payment processing and customer satisfaction.',
-            'Invoice Management': 'Facilitates proper invoice handling and reduces billing disputes through clear documentation.'
-        }
-        return relevance.get(category_name, f'Supports collections operations through effective {category_name.lower()} handling.')
-
-    def consolidate_categories(self, llm_analysis: Dict[str, Any]) -> Dict[str, Any]:
-        """Consolidate LLM-proposed categories using curation rules."""
-        proposed_taxonomy = llm_analysis.get('proposed_taxonomy', {})
-        intent_categories = proposed_taxonomy.get('intent_categories', {})
-        sentiment_categories = proposed_taxonomy.get('sentiment_categories', {})
-
-        # Consolidate intents
-        consolidated_intents = {}
-        for intent_name, intent_data in intent_categories.items():
-            # Find best match in consolidation rules
-            consolidated_name = self._find_consolidated_name(
-                intent_name,
-                self.curation_rules['intent_consolidation']
-            )
-
-            if consolidated_name not in consolidated_intents:
-                consolidated_intents[consolidated_name] = {
-                    'definition': intent_data.get('definition', ''),
-                    'clusters': [],
-                    'total_emails': 0,
-                    'original_names': []
-                }
-
-            consolidated_intents[consolidated_name]['clusters'].extend(intent_data.get('clusters', []))
-            consolidated_intents[consolidated_name]['total_emails'] += intent_data.get('total_emails', 0)
-            consolidated_intents[consolidated_name]['original_names'].append(intent_name)
-
-        # Consolidate sentiments
-        consolidated_sentiments = {}
-        for sentiment_name, sentiment_data in sentiment_categories.items():
-            consolidated_name = self._find_consolidated_name(
-                sentiment_name,
-                self.curation_rules['sentiment_consolidation']
-            )
-
-            if consolidated_name not in consolidated_sentiments:
-                consolidated_sentiments[consolidated_name] = {
-                    'definition': sentiment_data.get('definition', ''),
-                    'clusters': [],
-                    'total_emails': 0,
-                    'original_names': []
-                }
-
-            consolidated_sentiments[consolidated_name]['clusters'].extend(sentiment_data.get('clusters', []))
-            consolidated_sentiments[consolidated_name]['total_emails'] += sentiment_data.get('total_emails', 0)
-            consolidated_sentiments[consolidated_name]['original_names'].append(sentiment_name)
-
-        return {
-            'intent_categories': consolidated_intents,
-            'sentiment_categories': consolidated_sentiments
-        }
-
-    def _find_consolidated_name(self, original_name: str, consolidation_rules: Dict[str, List[str]]) -> str:
-        """Find the consolidated category name for an original name."""
-        original_lower = original_name.lower()
-
-        for consolidated_name, variants in consolidation_rules.items():
-            if any(variant in original_lower for variant in variants):
-                return consolidated_name
-
-        # If no match found, use original name (capitalized)
-        return original_name.title()
+    # Removed old consolidate_categories() and _find_consolidated_name() methods
+    # Now using LLM-based consolidation in _llm_consolidate_taxonomy()
 
     def _convert_consolidated_to_rich_format(self, consolidated_taxonomy_obj, original_rich_taxonomy: Dict[str, Any]) -> Dict[str, Any]:
         """Convert consolidated taxonomy object back to rich taxonomy format."""
@@ -1358,7 +1119,7 @@ CRITICAL: Return ONLY the JSON object. No additional text, explanations, or mark
             "# Production-ready categories for NetSuite Collection Notes automation",
             "",
             'version: "1.0"',
-            'generated_date: "2024-09-19"',
+            f'generated_date: "{datetime.now().strftime("%Y-%m-%d")}"',
             f'source_emails: {total_emails}',
             f'clusters_analyzed: {clusters_analyzed}',
             f'coverage: "{coverage_pct:.1f}%"  # {total_emails} emails from top {clusters_analyzed} clusters',
