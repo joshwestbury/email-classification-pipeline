@@ -254,7 +254,7 @@ class LLMAnalyzer:
         **Sentiment Definition**: The emotional tone conveyed in the customer's message - how they feel. This represents their EMOTIONAL STATE and COMMUNICATION STYLE. Sentiment captures:
         - Polarity (positive, negative, or neutral emotional direction)
         - Intensity (mild, moderate, or strong emotional expression)
-        - Specific emotional states (frustrated, grateful, apologetic, confused, urgent, cooperative, etc.)
+        - Specific emotional states as they naturally appear in the customer's language
 
         ## YOUR TASK: ORGANIC CATEGORY DISCOVERY
 
