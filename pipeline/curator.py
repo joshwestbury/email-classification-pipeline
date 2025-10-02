@@ -38,8 +38,8 @@ class ConsolidatedCategory(BaseModel):
 
 class ConsolidatedTaxonomy(BaseModel):
     """Pydantic model for consolidated taxonomy response."""
-    intent_categories: List[ConsolidatedCategory] = Field(..., min_items=3, max_items=5, description="EXACTLY 3-5 distinct intent categories")
-    sentiment_categories: List[ConsolidatedCategory] = Field(..., min_items=3, max_items=4, description="EXACTLY 3-4 distinct sentiment categories")
+    intent_categories: List[ConsolidatedCategory] = Field(..., min_items=5, max_items=7, description="EXACTLY 5-7 distinct, UNIQUE intent categories")
+    sentiment_categories: List[ConsolidatedCategory] = Field(..., min_items=4, max_items=6, description="EXACTLY 4-6 distinct, UNIQUE sentiment categories")
     consolidation_rationale: str = Field(..., min_length=100, max_length=1000, description="Explanation of consolidation decisions")
 
 
@@ -359,9 +359,22 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
                 guide += f"- {rule}\n"
 
             guide += "\n**Examples**:\n"
-            examples = intent_data.get('examples', [])
-            for example in examples:
-                guide += f"- \"{example}\"\n"
+            # Try to get real email examples first, fall back to key indicators
+            real_examples = intent_data.get('real_email_examples', [])
+            if real_examples:
+                for example in real_examples[:3]:  # Limit to 3 examples
+                    content = example.get('content', '')
+                    if content:
+                        guide += f"- \"{content}\"\n"
+            else:
+                # Fall back to examples from taxonomy (not placeholders)
+                examples = intent_data.get('examples', [])
+                for example in examples[:3]:
+                    # Skip generic placeholder examples
+                    if not ('Customer email requesting' in example or
+                           'Communication regarding' in example or
+                           'Email about' in example):
+                        guide += f"- \"{example}\"\n"
 
             guide += "\n"
 
@@ -382,9 +395,22 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
                 guide += f"- {rule}\n"
 
             guide += "\n**Examples**:\n"
-            examples = sentiment_data.get('examples', [])
-            for example in examples:
-                guide += f"- \"{example}\"\n"
+            # Try to get real email examples first, fall back to key indicators
+            real_examples = sentiment_data.get('real_email_examples', [])
+            if real_examples:
+                for example in real_examples[:3]:  # Limit to 3 examples
+                    content = example.get('content', '')
+                    if content:
+                        guide += f"- \"{content}\"\n"
+            else:
+                # Fall back to examples from taxonomy (not placeholders)
+                examples = sentiment_data.get('examples', [])
+                for example in examples[:3]:
+                    # Skip generic placeholder examples
+                    if not ('Customer email requesting' in example or
+                           'Communication regarding' in example or
+                           'Email about' in example):
+                        guide += f"- \"{example}\"\n"
 
             guide += "\n"
 
@@ -595,7 +621,7 @@ This guide provides detailed instructions for classifying INCOMING CUSTOMER emai
             'sentiment_categories': sentiment_categories
         }
 
-        if self.client and (len(intent_categories) > 5 or len(sentiment_categories) > 4):
+        if self.client and (len(intent_categories) > 7 or len(sentiment_categories) > 6):
             logger.info("Taxonomy has too many categories - applying LLM-based consolidation...")
             try:
                 consolidated = self._llm_consolidate_taxonomy(granular_taxonomy)
@@ -957,32 +983,52 @@ Your task is to consolidate a granular taxonomy of customer email categories int
 ## CONSOLIDATION REQUIREMENTS
 
 **Target Output:**
-- 3-5 Intent Categories that capture distinct customer purposes
-- 3-4 Sentiment Categories that reflect meaningful emotional tones
+- EXACTLY 5-7 Intent Categories that capture distinct customer purposes
+- EXACTLY 4-6 Sentiment Categories that reflect meaningful emotional tones
+
+**CRITICAL: Each category must be UNIQUE and DISCRETE**
+- Categories must represent fundamentally different communication patterns
+- NO overlapping definitions - each category must be clearly distinct
+- Categories must require different operational responses
+- Avoid creating categories that are merely variations of each other
 
 **Consolidation Principles:**
 1. **Semantic Similarity**: Merge categories that have similar meanings or serve similar business purposes
 2. **Operational Distinctness**: Keep categories separate ONLY if they require fundamentally different agent responses
 3. **Data-Driven Naming**: Use category names that emerge from the actual patterns observed in the data
 4. **Eliminate Redundancy**: Merge overlapping or redundant categories while preserving meaningful distinctions
+5. **Minimum Coverage**: Each final category should represent at least 5% of total emails (avoid rare edge cases)
 
 **Intent Consolidation Guidelines:**
 - Identify which intent categories describe similar customer purposes
 - Merge categories that would trigger the same operational response
 - Preserve distinctions that genuinely affect how collections agents should respond
+- Each final category must be DISCRETE - no partial overlaps allowed
+- Test: "Can I clearly explain when to use Category A vs Category B?" If not, merge them
 - Choose consolidated category names that best represent the merged group
 
 **Sentiment Consolidation Guidelines:**
 - Identify which sentiment categories describe similar emotional tones or communication styles
 - Merge categories with overlapping emotional characteristics
-- Preserve distinctions that require different handling approaches
+- Each final sentiment must be UNIQUE - no gradient variations of the same emotion
+- Avoid creating multiple levels of the same sentiment (e.g., "Frustrated" and "Very Frustrated" should be ONE category)
+- Preserve distinctions that require fundamentally different handling approaches (e.g., cooperative vs hostile)
 - Choose consolidated category names that authentically reflect the emotional patterns observed
+
+**Uniqueness Validation:**
+For each pair of final categories, ask:
+1. "Are these fundamentally different communication patterns?" → If NO, merge them
+2. "Would agents respond differently to these categories?" → If NO, merge them
+3. "Can an email clearly belong to only ONE of these?" → If NO, merge them
+4. "Do these meet the 5% minimum coverage threshold?" → If NO, merge or discard
 
 **Critical Instructions:**
 - Category names should emerge from the DATA, not from preconceptions
-- If consolidation results in too many categories, continue merging the most similar ones
+- EXACTLY 5-7 intents and 4-6 sentiments - no more, no less
+- Each category must represent at least 5% of total emails
 - Focus on business utility - each category should provide actionable insights
 - Respect the actual communication patterns present in the analyzed emails
+- NO overlapping or ambiguous category boundaries
 
 **KEY INDICATORS REQUIREMENT - CRITICAL:**
 - Each category MUST have UNIQUE key indicators that distinguish it from OTHER categories

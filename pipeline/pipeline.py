@@ -203,7 +203,8 @@ class TaxonomyPipeline:
         """Run LLM analysis step."""
         analyzer = LLMAnalyzer(
             model=self.config.openai_model,
-            top_clusters=self.config.analyze_top_clusters
+            top_clusters=self.config.analyze_top_clusters,
+            preanalysis_mode=self.config.preanalysis_mode
         )
 
         cluster_results = self.state['clusters']

@@ -38,6 +38,9 @@ class PipelineConfig:
     openai_model: str = "gpt-4o"
     analyze_top_clusters: int = 1000  # Analyze ALL clusters
 
+    # Sentiment pre-analysis mode
+    preanalysis_mode: str = "features"  # {"features", "labels"} - default "features"
+
     # System Prompt Generation
     generate_prompt: bool = True
     prompt_include_examples: bool = True

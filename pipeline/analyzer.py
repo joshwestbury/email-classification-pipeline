@@ -45,12 +45,13 @@ class LLMClusterAnalysis(BaseModel):
 class LLMAnalyzer:
     """Analyzes email clusters and proposes categories using LLM."""
 
-    def __init__(self, model: str = "gpt-4o", top_clusters: int = 26, api_key: Optional[str] = None):
+    def __init__(self, model: str = "gpt-4o", top_clusters: int = 26, api_key: Optional[str] = None, preanalysis_mode: str = "features"):
         self.model = model
         self.top_clusters = top_clusters
+        self.preanalysis_mode = preanalysis_mode
 
-        # Initialize sentiment analyzer
-        self.sentiment_analyzer = SentimentAnalyzer()
+        # Initialize sentiment analyzer with configured mode
+        self.sentiment_analyzer = SentimentAnalyzer(mode=preanalysis_mode)
 
         # Initialize OpenAI client
         if api_key:
@@ -183,6 +184,9 @@ class LLMAnalyzer:
         cluster_info = cluster_analysis.get(cluster_id, {})
         cluster_size = cluster_info.get('size', 0)
         cluster_percentage = cluster_info.get('percentage', 0)
+
+        # Get pre-analysis data (features or labels depending on mode)
+        linguistic_preanalysis = cluster_info.get('linguistic_preanalysis', {})
         sentiment_analysis = cluster_info.get('sentiment_analysis', {})
 
         # Prepare prompt with sample emails
@@ -192,6 +196,30 @@ class LLMAnalyzer:
             samples_text += f"Subject: {email['subject']}\n"
             samples_text += f"Content: {email['content']}\n"
             samples_text += "-" * 50 + "\n"
+
+        # Prepare pre-analysis section based on mode
+        preanalysis_section = ""
+        if self.preanalysis_mode == "features" and linguistic_preanalysis:
+            # Feature-based pre-analysis (no category labels)
+            feature_summary = linguistic_preanalysis.get('feature_summary', {})
+            feature_examples = linguistic_preanalysis.get('top_feature_examples', {})
+
+            preanalysis_section = "\n## Linguistic Pre-Analysis (Features)\n\n"
+            preanalysis_section += "The following linguistic features have been detected in this cluster:\n\n"
+            preanalysis_section += json.dumps({
+                'feature_summary': feature_summary,
+                'top_feature_examples': feature_examples
+            }, indent=2)
+            preanalysis_section += "\n\nThese are purely descriptive linguistic measurements. Use them as context, but let the sentiment categories emerge naturally from the email content.\n"
+
+        elif self.preanalysis_mode == "labels" and sentiment_analysis:
+            # Label-based pre-analysis (legacy/debug mode)
+            dominant_sentiment = sentiment_analysis.get('dominant_sentiment', 'unknown')
+            sentiment_dist = sentiment_analysis.get('distribution', {})
+
+            preanalysis_section = "\n## Pattern-Based Sentiment Analysis (Pre-Analysis)\n\n"
+            preanalysis_section += f"Dominant Sentiment: {dominant_sentiment}\n"
+            preanalysis_section += f"Sentiment Distribution: {sentiment_dist}\n"
 
         prompt = f"""
         Analyze the following collection of INCOMING CUSTOMER emails that have been clustered together based on semantic similarity. These are emails RECEIVED by a collections/accounts receivable department FROM CUSTOMERS.
@@ -206,7 +234,7 @@ class LLMAnalyzer:
         - Cluster ID: {cluster_id}
         - Cluster Size: {cluster_size} incoming customer emails
         - Percentage of Incoming Emails: {cluster_percentage:.1f}%
-
+{preanalysis_section}
         Your task is to:
         1. Identify the natural intent that emerges from these customer emails
         2. Determine the authentic emotional tone present in the communications

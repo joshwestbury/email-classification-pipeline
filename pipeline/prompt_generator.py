@@ -10,6 +10,38 @@ import yaml
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+from pydantic import BaseModel, Field, field_validator
+
+
+class Modifiers(BaseModel):
+    """Email classification modifiers."""
+    urgency: bool = Field(default=False, description="Email contains urgency indicators")
+    escalation: bool = Field(default=False, description="Email contains escalation language")
+    payment_commitment: bool = Field(default=False, description="Email contains payment commitment")
+
+
+class EmailClassification(BaseModel):
+    """Production email classification response schema.
+
+    This model validates LLM responses for production email classification.
+    Intent and sentiment must match categories defined in taxonomy.yaml.
+    """
+    intent: str = Field(..., description="Intent category from taxonomy")
+    sentiment: str = Field(..., description="Sentiment category from taxonomy")
+    modifiers: Modifiers = Field(..., description="Optional modifier flags")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Overall classification confidence")
+    evidence_spans: List[str] = Field(..., max_length=5, description="Key phrases supporting classification")
+    route_to: Optional[str] = Field(None, description="Suggested routing (Billing|SeniorCollector|AM)")
+
+    @field_validator('evidence_spans')
+    @classmethod
+    def validate_evidence_spans(cls, v: List[str]) -> List[str]:
+        """Ensure evidence spans are non-empty and limited."""
+        if not v:
+            raise ValueError("At least one evidence span is required")
+        if len(v) > 5:
+            raise ValueError("Maximum 5 evidence spans allowed")
+        return v
 
 
 class PromptGenerator:
@@ -28,8 +60,8 @@ class PromptGenerator:
         # Prompt generation parameters
         self.include_examples = self.config.get('include_examples', True)
         self.include_confidence_scoring = self.config.get('include_confidence_scoring', True)
-        self.include_entity_extraction = self.config.get('include_entity_extraction', True)
-        self.include_chain_of_thought = self.config.get('include_chain_of_thought', True)
+        self.include_entity_extraction = self.config.get('include_entity_extraction', False)
+        self.include_chain_of_thought = self.config.get('include_chain_of_thought', False)  # Disabled for production
         self.max_examples_per_category = self.config.get('max_examples_per_category', 3)
 
     def generate(self, taxonomy_path: Path, output_path: Optional[Path] = None) -> Dict[str, Any]:
@@ -137,11 +169,17 @@ Analyze the provided customer email and determine:
 1. **INTENT** - The primary purpose or goal of the customer's communication
 2. **SENTIMENT** - The emotional tone and cooperative level of the message
 3. **MODIFIERS** - Any special flags requiring attention (urgency, escalation, payment commitment)
-4. **ENTITIES** - Extract relevant business entities (invoice numbers, amounts, dates)
-5. **SUMMARY** - Concise summary of the email content (max 2 sentences)
-6. **RECOMMENDED ACTION** - Suggested next step for the collection agent
+4. **CONFIDENCE** - Your overall classification confidence (0.0-1.0)
+5. **EVIDENCE** - Key phrases from the email that support your classification
+6. **ROUTING** - Optional suggestion for which team should handle this (Billing, SeniorCollector, AM)
 
-This classification system was derived from analysis of {taxonomy.get('source_emails', 'N/A')} real collection emails."""
+This classification system was derived from analysis of {taxonomy.get('source_emails', 'N/A')} real collection emails.
+
+**Routing Guidelines:**
+- **Billing**: Invoice corrections, W9 requests, documentation issues
+- **SeniorCollector**: Escalated issues, frustrated customers, payment disputes
+- **AM (Account Manager)**: Relationship management, complex inquiries, VIP customers
+- **null**: Standard collection workflow (default)"""
 
     def _generate_intent_section(self, taxonomy: Dict[str, Any]) -> str:
         """Generate enhanced intent categories section."""
@@ -268,46 +306,47 @@ This classification system was derived from analysis of {taxonomy.get('source_em
     def _generate_output_format(self, taxonomy: Dict[str, Any]) -> str:
         """Generate output format specification."""
         section = "## OUTPUT FORMAT\n\n"
-        section += "Return your classification in the following JSON structure:\n\n"
-        section += """```json
-{
-  "intent": {
-    "category": "payment_inquiry|invoice_management|information_request",
-    "confidence": 0.0-1.0,
-    "reasoning": "Brief explanation of classification decision"
-  },
-  "sentiment": {
-    "category": "cooperative|administrative|informational|frustrated",
-    "confidence": 0.0-1.0,
-    "reasoning": "Brief explanation of sentiment assessment"
-  },
-  "modifiers": {
-    "urgency": boolean,
-    "escalation": boolean,
-    "payment_commitment": boolean
-  },
-  "extracted_entities": {
-    "invoice_numbers": ["INV-123", "#456"],
-    "amounts": ["$1,234.56"],
-    "dates": ["2024-01-15", "next week"],
-    "company_names": ["Acme Corp"],
-    "contact_names": ["John Doe"]
-  },
-  "summary": "1-2 sentence summary of the email content",
-  "recommended_action": "Specific next step for the collection agent",
-  "requires_human_review": boolean,
-  "review_reason": "Only if requires_human_review is true"
-}
-```"""
+        section += "Return your classification in the following STRICT JSON structure:\n\n"
+
+        # Get actual category names from taxonomy
+        intent_cats = list(taxonomy.get('intent_categories', {}).keys())
+        sentiment_cats = list(taxonomy.get('sentiment_categories', {}).keys())
+
+        intent_enum = " | ".join(intent_cats)
+        sentiment_enum = " | ".join(sentiment_cats)
+
+        section += f"""```json
+{{
+  "intent": "{intent_enum}",
+  "sentiment": "{sentiment_enum}",
+  "modifiers": {{
+    "urgency": false,
+    "escalation": false,
+    "payment_commitment": false
+  }},
+  "confidence": 0.0,
+  "evidence_spans": ["key phrase 1", "key phrase 2", "key phrase 3"],
+  "route_to": "Billing | SeniorCollector | AM | null"
+}}
+```
+
+**CRITICAL REQUIREMENTS:**
+- `intent` must be EXACTLY one of: {', '.join([f'`{c}`' for c in intent_cats])}
+- `sentiment` must be EXACTLY one of: {', '.join([f'`{c}`' for c in sentiment_cats])}
+- `modifiers` are boolean flags (true/false only)
+- `confidence` is a float between 0.0 and 1.0
+- `evidence_spans` contains 1-5 direct quotes from the email that support your classification
+- `route_to` is optional but should be one of: Billing, SeniorCollector, AM, or null
+"""
 
         if self.include_confidence_scoring:
             section += """
-
 ### Confidence Scoring Guidelines:
 - **0.9-1.0:** Multiple clear indicators present, unambiguous classification
 - **0.7-0.89:** Primary indicators present with minor ambiguity
 - **0.5-0.69:** Some indicators present but context is unclear
-- **0.0-0.49:** Weak or conflicting indicators - flag for human review"""
+- **0.0-0.49:** Weak or conflicting indicators - flag for human review
+"""
 
         return section
 
@@ -387,105 +426,73 @@ This classification system was derived from analysis of {taxonomy.get('source_em
 Remember: This classification directly impacts customer service quality and collection efficiency. Your accurate classification helps agents provide better, faster responses to customers."""
 
     def _generate_json_schema(self, taxonomy: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate JSON schema for structured output validation."""
+        """Generate JSON schema for structured output validation.
 
-        # Get category enums
+        Produces a simplified, production-ready schema matching the EmailClassification Pydantic model.
+        """
+
+        # Get category enums dynamically from taxonomy
         intent_categories = list(taxonomy.get('intent_categories', {}).keys())
         sentiment_categories = list(taxonomy.get('sentiment_categories', {}).keys())
 
         schema = {
             "$schema": "http://json-schema.org/draft-07/schema#",
+            "title": "Email Classification Schema",
+            "description": "Production schema for email classification, dynamically generated from taxonomy.yaml",
             "type": "object",
-            "required": ["intent", "sentiment", "modifiers", "extracted_entities", "summary", "recommended_action"],
+            "required": ["intent", "sentiment", "modifiers", "confidence", "evidence_spans"],
             "properties": {
                 "intent": {
-                    "type": "object",
-                    "required": ["category", "confidence", "reasoning"],
-                    "properties": {
-                        "category": {
-                            "type": "string",
-                            "enum": intent_categories
-                        },
-                        "confidence": {
-                            "type": "number",
-                            "minimum": 0,
-                            "maximum": 1
-                        },
-                        "reasoning": {
-                            "type": "string",
-                            "maxLength": 200
-                        }
-                    }
+                    "type": "string",
+                    "enum": intent_categories,
+                    "description": "Intent category from taxonomy"
                 },
                 "sentiment": {
-                    "type": "object",
-                    "required": ["category", "confidence", "reasoning"],
-                    "properties": {
-                        "category": {
-                            "type": "string",
-                            "enum": sentiment_categories
-                        },
-                        "confidence": {
-                            "type": "number",
-                            "minimum": 0,
-                            "maximum": 1
-                        },
-                        "reasoning": {
-                            "type": "string",
-                            "maxLength": 200
-                        }
-                    }
+                    "type": "string",
+                    "enum": sentiment_categories,
+                    "description": "Sentiment category from taxonomy"
                 },
                 "modifiers": {
                     "type": "object",
                     "required": ["urgency", "escalation", "payment_commitment"],
                     "properties": {
-                        "urgency": {"type": "boolean"},
-                        "escalation": {"type": "boolean"},
-                        "payment_commitment": {"type": "boolean"}
-                    }
-                },
-                "extracted_entities": {
-                    "type": "object",
-                    "properties": {
-                        "invoice_numbers": {
-                            "type": "array",
-                            "items": {"type": "string"}
+                        "urgency": {
+                            "type": "boolean",
+                            "description": "Email contains urgency indicators"
                         },
-                        "amounts": {
-                            "type": "array",
-                            "items": {"type": "string"}
+                        "escalation": {
+                            "type": "boolean",
+                            "description": "Email contains escalation language"
                         },
-                        "dates": {
-                            "type": "array",
-                            "items": {"type": "string"}
-                        },
-                        "company_names": {
-                            "type": "array",
-                            "items": {"type": "string"}
-                        },
-                        "contact_names": {
-                            "type": "array",
-                            "items": {"type": "string"}
+                        "payment_commitment": {
+                            "type": "boolean",
+                            "description": "Email contains payment commitment"
                         }
-                    }
+                    },
+                    "additionalProperties": False
                 },
-                "summary": {
-                    "type": "string",
-                    "maxLength": 500
+                "confidence": {
+                    "type": "number",
+                    "minimum": 0.0,
+                    "maximum": 1.0,
+                    "description": "Overall classification confidence (0.0-1.0)"
                 },
-                "recommended_action": {
-                    "type": "string",
-                    "maxLength": 200
+                "evidence_spans": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "minItems": 1,
+                    "maxItems": 5,
+                    "description": "Key phrases from email supporting classification (1-5 quotes)"
                 },
-                "requires_human_review": {
-                    "type": "boolean"
-                },
-                "review_reason": {
-                    "type": "string",
-                    "maxLength": 200
+                "route_to": {
+                    "type": ["string", "null"],
+                    "enum": ["Billing", "SeniorCollector", "AM", None],
+                    "description": "Optional routing suggestion"
                 }
-            }
+            },
+            "additionalProperties": False
         }
 
         return schema
