@@ -27,12 +27,13 @@ class PipelineConfig:
     embedding_model: str = "all-mpnet-base-v2"
     include_thread_context: bool = True
 
-    # Clustering parameters - Granular settings for more specific categories
-    umap_n_neighbors: int = 8        # Reduced from 15 for tighter neighborhoods
+    # Clustering parameters - Optimized to mitigate curse of dimensionality
+    umap_n_neighbors: int = 30       # Increased to capture more global structure
     umap_min_dist: float = 0.01      # Reduced from 0.1 for better separation
-    umap_n_components: int = 35      # Reduced from 50 to avoid bottleneck
-    hdbscan_min_cluster_size: int = 3  # Reduced from 5 for smaller clusters
-    hdbscan_min_samples: int = 1     # Reduced from 3 for lower noise threshold
+    umap_n_components: int = 8       # Increased from 2 for richer representations
+    hdbscan_min_cluster_size: int = 12  # Increased for more robust clusters
+    hdbscan_min_samples: int = 5     # Increased to require denser clusters
+    hdbscan_cluster_selection_method: str = "eom"  # Excess of Mass for more stable clusters
 
     # LLM analysis
     openai_model: str = "gpt-4o"

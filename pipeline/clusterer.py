@@ -33,6 +33,7 @@ class Clusterer:
         self.hdbscan_params = hdbscan_params or {
             'min_cluster_size': 5,  # Smaller clusters to preserve minority sentiments
             'min_samples': 2,       # Reduced to allow smaller sentiment groups
+            'cluster_selection_method': 'eom',  # Excess of Mass for more stable clusters
             'metric': 'euclidean',
             'cluster_selection_epsilon': 0.2  # Tighter epsilon for better separation
         }

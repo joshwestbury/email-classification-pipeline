@@ -186,6 +186,7 @@ class TaxonomyPipeline:
             hdbscan_params={
                 'min_cluster_size': self.config.hdbscan_min_cluster_size,
                 'min_samples': self.config.hdbscan_min_samples,
+                'cluster_selection_method': self.config.hdbscan_cluster_selection_method,
                 'metric': 'euclidean'
             }
         )
