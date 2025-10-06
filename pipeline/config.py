@@ -24,7 +24,7 @@ class PipelineConfig:
     separate_threads: bool = True
 
     # Embedding settings
-    embedding_model: str = "all-mpnet-base-v2"
+    embedding_model: str = "jinaai/jina-embeddings-v2-base-en"
     include_thread_context: bool = True
 
     # Clustering parameters - Optimized to mitigate curse of dimensionality

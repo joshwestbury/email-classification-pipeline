@@ -7,6 +7,7 @@ import json
 import logging
 import signal
 import sys
+import os
 from pathlib import Path
 from typing import Dict, Any, Optional
 
@@ -63,9 +64,44 @@ class TaxonomyPipeline:
         )
         return logging.getLogger(f'pipeline.{self.config.dataset_name}')
 
+    def _check_huggingface_auth(self) -> bool:
+        """Check if HuggingFace authentication is available for gated models."""
+        # Check if using a Jina model (which requires authentication)
+        if "jina" not in self.config.embedding_model.lower():
+            return True  # No authentication needed
+
+        # Check for HF token in environment or config
+        hf_token = os.environ.get('HF_TOKEN') or os.environ.get('HUGGING_FACE_HUB_TOKEN')
+
+        # Check if user is logged in via huggingface-cli
+        hf_token_path = Path.home() / '.huggingface' / 'token'
+
+        if hf_token or hf_token_path.exists():
+            self.logger.info("HuggingFace authentication found")
+            return True
+        else:
+            self.logger.error(
+                "\n" + "="*80 + "\n"
+                "ERROR: Jina embeddings require HuggingFace authentication\n"
+                "="*80 + "\n"
+                "The model 'jinaai/jina-embeddings-v2-base-en' is gated and requires login.\n\n"
+                "Please authenticate using ONE of these methods:\n\n"
+                "1. Command line (recommended):\n"
+                "   huggingface-cli login\n\n"
+                "2. Environment variable:\n"
+                "   export HF_TOKEN='your_token_here'\n\n"
+                "3. Get your token from: https://huggingface.co/settings/tokens\n"
+                "="*80
+            )
+            return False
+
     def run_full_pipeline(self) -> Dict[str, Any]:
         """Run the complete taxonomy discovery pipeline."""
         self.logger.info(f"Starting taxonomy pipeline for dataset: {self.config.dataset_name}")
+
+        # Check authentication for gated models
+        if not self._check_huggingface_auth():
+            raise RuntimeError("HuggingFace authentication required for gated models. See error message above.")
 
         # Step 1: Data Processing
         if self.config.clean_html or self.config.separate_threads:

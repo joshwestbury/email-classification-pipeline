@@ -28,7 +28,14 @@ class Embedder:
         """Load the sentence transformer model."""
         if self.model is None:
             logger.info(f"Loading embedding model: {self.model_name}")
-            self.model = SentenceTransformer(self.model_name)
+
+            # Jina models require trust_remote_code=True for proper pooling
+            if "jina" in self.model_name.lower():
+                logger.info("Detected Jina model - enabling trust_remote_code=True")
+                self.model = SentenceTransformer(self.model_name, trust_remote_code=True)
+            else:
+                self.model = SentenceTransformer(self.model_name)
+
             logger.info(f"Model loaded successfully. Embedding dimension: {self.model.get_sentence_embedding_dimension()}")
         return self.model
 
