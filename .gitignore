@@ -9,6 +9,11 @@ wheels/
 # Virtual environments
 .venv
 
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
 # Data files (contain sensitive information)
 emails_cleaned.json
 emails_anonymized.json
@@ -51,4 +56,9 @@ test_*.txt
 # Pipeline outputs and data
 outputs/
 source_data/
+raw_data/
 .anonymization_salt
+
+# Documentation artifacts (internal notes)
+CONSOLIDATION_FIXES.md
+REORGANIZATION_COMPLETE.md
