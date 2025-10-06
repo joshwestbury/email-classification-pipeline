@@ -1247,6 +1247,54 @@ class DataProcessor:
 
         return '\n'.join(fixed_lines)
 
+    def load_emails_from_directory(self, directory: Path) -> List[Dict[str, Any]]:
+        """Load and concatenate all JSON files from a directory."""
+        directory = Path(directory)
+
+        if not directory.exists():
+            raise ValueError(f"Directory not found: {directory}")
+
+        json_files = sorted(directory.glob("*.json"))
+
+        if not json_files:
+            raise ValueError(f"No JSON files found in {directory}")
+
+        logger.info(f"Found {len(json_files)} JSON files in {directory}")
+
+        all_emails = []
+
+        for json_file in json_files:
+            logger.info(f"Loading {json_file.name}...")
+
+            try:
+                with open(json_file, 'r', encoding='utf-8') as f:
+                    raw_data = json.load(f)
+                logger.info(f"  ✓ Successfully parsed {json_file.name}")
+            except json.JSONDecodeError as e:
+                logger.warning(f"  Standard JSON parsing failed for {json_file.name}: {e}")
+                logger.info(f"  Attempting to parse malformed JSON...")
+
+                with open(json_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+
+                raw_data = self.parse_malformed_json(content)
+                logger.info(f"  ✓ Parsed {json_file.name} with malformed JSON recovery")
+
+            # Handle different input formats
+            if isinstance(raw_data, list):
+                emails = raw_data
+            elif isinstance(raw_data, dict) and 'emails' in raw_data:
+                emails = raw_data['emails']
+            else:
+                logger.warning(f"  ✗ Skipping {json_file.name} - unrecognized format")
+                continue
+
+            logger.info(f"  ✓ Loaded {len(emails)} emails from {json_file.name}")
+            all_emails.extend(emails)
+
+        logger.info(f"Total emails loaded from all files: {len(all_emails)}")
+        return all_emails
+
     def process_emails(self, input_file: str) -> Dict[str, Any]:
         """Process raw email data through the complete pipeline."""
         logger.info(f"Processing emails from {input_file}")
@@ -1336,6 +1384,16 @@ class DataProcessor:
         logger.info(f"Processing complete: {len(emails)} emails in {len(relevant_threads)} relevant threads ({incoming_count} incoming, {outgoing_count} outgoing)")
 
         return processed_data
+
+    def process_emails_from_directory(self, directory: Path) -> Dict[str, Any]:
+        """Process all JSON files from a directory."""
+        logger.info(f"Processing emails from directory: {directory}")
+
+        # Load and concatenate all JSON files
+        emails = self.load_emails_from_directory(directory)
+
+        # Process the combined email data
+        return self.process_emails_from_data(emails)
 
     def process_emails_from_data(self, emails: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Process email data that's already loaded in memory."""

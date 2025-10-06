@@ -3,17 +3,21 @@
 CLI entry point for the email taxonomy discovery pipeline.
 
 Usage examples:
+    # Run with default raw_data directory (loads all JSON files)
+    python run_pipeline.py
+    python run_pipeline.py --dataset-name my_analysis
+
+    # Run with specific input file
+    python run_pipeline.py --input emails.json --dataset-name my_dataset
+
+    # Run with specific directory
+    python run_pipeline.py --input my_data_dir --dataset-name my_dataset
+
     # Create a template config
     python run_pipeline.py --create-template
 
     # Run with config file
     python run_pipeline.py --config my_dataset.yaml
-
-    # Quick run with minimal config
-    python run_pipeline.py --input emails.json --dataset-name my_dataset
-
-    # Run specific steps only
-    python run_pipeline.py --config my_dataset.yaml --steps embedding,clustering,analysis
 """
 
 import argparse
@@ -67,11 +71,24 @@ def run_pipeline_from_config(config_path: str, steps: str | None = None) -> None
     print(f"Output directory: {Path(config.output_dir) / config.dataset_name}")
 
 
-def run_pipeline_quick(input_file: str, dataset_name: str | None = None) -> None:
+def run_pipeline_quick(input_path: str | None = None, dataset_name: str | None = None) -> None:
     """Run the pipeline with granular configuration for specific categories."""
-    if not Path(input_file).exists():
-        print(f"Error: Input file {input_file} not found.")
+    # Default to raw_data directory if no input provided
+    if input_path is None:
+        input_path = "raw_data"
+        print(f"No input specified - defaulting to raw_data directory")
+
+    input_file = Path(input_path)
+
+    if not input_file.exists():
+        print(f"Error: Input path {input_file} not found.")
         sys.exit(1)
+
+    # Determine if it's a directory or file
+    if input_file.is_dir():
+        print(f"Input is a directory - will load and concatenate all JSON files from {input_file}")
+    else:
+        print(f"Input is a file - will load {input_file}")
 
     # Use auto-numbering if no dataset name provided
     auto_number = dataset_name is None
@@ -79,7 +96,7 @@ def run_pipeline_quick(input_file: str, dataset_name: str | None = None) -> None
         dataset_name = "temp"  # Will be replaced by auto-numbering
 
     # Use granular configuration by default for better category specificity
-    config = PipelineConfig.load_granular_config(input_file, dataset_name)
+    config = PipelineConfig.load_granular_config(str(input_file), dataset_name)
 
     # Apply auto-numbering if needed
     if auto_number:
@@ -138,7 +155,7 @@ Examples:
         """,
     )
 
-    group = parser.add_mutually_exclusive_group(required=True)
+    group = parser.add_mutually_exclusive_group(required=False)
 
     group.add_argument(
         "--create-template",
@@ -148,8 +165,11 @@ Examples:
 
     group.add_argument("--config", type=str, help="Path to configuration YAML file")
 
-    group.add_argument(
-        "--input", type=str, help="Input email JSON file (for quick run)"
+    parser.add_argument(
+        "--input",
+        type=str,
+        default=None,
+        help="Input path (file or directory). Defaults to 'raw_data' directory if not specified. If directory, all JSON files will be concatenated."
     )
 
     parser.add_argument(
@@ -178,7 +198,8 @@ Examples:
             create_template_config(args.template_output)
         elif args.config:
             run_pipeline_from_config(args.config, args.steps)
-        elif args.input:
+        else:
+            # Default to quick run (with or without --input)
             run_pipeline_quick(args.input, args.dataset_name)
     except KeyboardInterrupt:
         print("\nPipeline interrupted by user. Exiting...")

@@ -15,8 +15,8 @@ class PipelineConfig:
     """Configuration for the complete pipeline run."""
 
     # Input data
-    input_file: str
     dataset_name: str
+    input_file: str = "raw_data"  # Default to raw_data directory
 
     # Processing options
     clean_html: bool = True

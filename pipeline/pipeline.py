@@ -157,7 +157,17 @@ class TaxonomyPipeline:
             separate_threads=self.config.separate_threads
         )
 
-        processed_data = processor.process_emails(self.config.input_file)
+        # Check if input is a directory or a file
+        input_path = Path(self.config.input_file)
+
+        if input_path.is_dir():
+            self.logger.info(f"Input is a directory - loading all JSON files from {input_path}")
+            processed_data = processor.process_emails_from_directory(input_path)
+        elif input_path.is_file():
+            self.logger.info(f"Input is a file - loading {input_path}")
+            processed_data = processor.process_emails(self.config.input_file)
+        else:
+            raise ValueError(f"Input path does not exist: {input_path}")
 
         if self.config.save_intermediate:
             output_path = self.config.get_output_path('processed_emails.json')
