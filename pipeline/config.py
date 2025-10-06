@@ -126,6 +126,13 @@ class ConfigManager:
         )
 
     @staticmethod
+    def apply_auto_numbering(config: PipelineConfig) -> PipelineConfig:
+        """Apply auto-numbering to a config's dataset name."""
+        next_number = ConfigManager._get_next_analysis_number(config.output_dir)
+        config.dataset_name = f"output_analysis_{next_number}"
+        return config
+
+    @staticmethod
     def create_template_config(filepath: str) -> None:
         """Create a template configuration file."""
         template_config = PipelineConfig(
