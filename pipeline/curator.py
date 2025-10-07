@@ -1375,7 +1375,7 @@ CRITICAL: Return ONLY the JSON object. No additional text, explanations, or mark
 
 You are an expert email classifier for collections operations. Your task is to analyze incoming customer emails and classify them by INTENT and SENTIMENT to help collections teams respond appropriately.
 
-## CRITICAL INSTRUCTIONS
+## 1. CRITICAL INSTRUCTIONS
 
 1. You MUST classify every email with exactly ONE intent and exactly ONE sentiment
 2. Base your classification ONLY on the email content, not assumptions
@@ -1383,14 +1383,14 @@ You are an expert email classifier for collections operations. Your task is to a
 4. When uncertain, apply the disambiguation rules provided below
 5. Provide confidence scores and reasoning to indicate classification certainty
 
-## CLASSIFICATION OVERVIEW
+## 2. CLASSIFICATION OVERVIEW
 
 **INTENT**: What the customer wants to achieve (their purpose/goal)
 **SENTIMENT**: The customer's emotional tone and communication style
 
 You must classify each email with exactly ONE intent and ONE sentiment category.
 
-## INTENT CATEGORIES
+## 3. INTENT CATEGORIES
 
 """
 
@@ -1418,7 +1418,7 @@ You must classify each email with exactly ONE intent and ONE sentiment category.
 """
 
         prompt += f"""
-## SENTIMENT CATEGORIES
+## 4. SENTIMENT CATEGORIES
 
 """
 
@@ -1447,7 +1447,7 @@ You must classify each email with exactly ONE intent and ONE sentiment category.
 
         # Add classification methodology
         prompt += """
-## CLASSIFICATION METHODOLOGY
+## 5. CLASSIFICATION METHODOLOGY
 
 Follow this step-by-step process for every email:
 
@@ -1468,12 +1468,16 @@ Follow this step-by-step process for every email:
 - Consider how the sentiment affects required response approach
 
 ### Step 4: Entity Extraction
-Scan the email for relevant business entities:
-- Invoice numbers (formats: INV-XXXX, #XXXXX, Invoice XXXX)
-- Payment amounts ($X,XXX.XX or similar currency formats)
-- Dates (various formats: YYYY-MM-DD, MM/DD/YYYY, "next week", etc.)
-- Account numbers or customer IDs
-- Contact names and company names
+Scan the email for relevant business entities and normalize them:
+- **Invoice numbers**: Accept formats with/without dashes/spaces (INV-XXXX, INV XXXX, INVXXXX, #XXXXX)
+- **Payment amounts**: Normalize currency symbols and formats (USD $1,234.56, EUR €1.234,56, GBP £1,234.56)
+  - Retain the currency symbol and amount
+  - Accept amounts with or without thousand separators
+- **Dates**: Convert to ISO format (YYYY-MM-DD) when possible
+  - Absolute dates: "January 15, 2024" → "2024-01-15"
+  - Relative dates: If an absolute date can be inferred, convert it; otherwise leave raw ("next Thursday")
+- **Account numbers or customer IDs**: Extract as-is
+- **Contact names and company names**: Extract as-is
 
 ### Step 5: Confidence Assessment
 Assign confidence based on indicator clarity:
@@ -1483,33 +1487,58 @@ Assign confidence based on indicator clarity:
 
 """
 
-        # Add output format
-        prompt += """
-## OUTPUT FORMAT
+        # Add business priority guidelines BEFORE output format (improves token generation)
+        prompt += f"""
+## 6. BUSINESS PRIORITY GUIDELINES
 
-Respond with ONLY a valid JSON object in this exact format:
+Assign business priority based on these factors:
 
-```json
-{
+**High Priority**:
+- Emails with frustrated or escalated sentiment
+- Payment disputes or urgent payment issues
+- Time-sensitive matters (deadlines mentioned)
+- Multiple follow-ups on same issue
+
+**Medium Priority**:
+- Standard requests from cooperative customers
+- Routine updates or confirmations
+- Non-urgent information requests
+
+**Low Priority**:
+- Purely informational emails requiring no action
+- Acknowledgments or thank-you messages
+- Out-of-office or automated replies
+
+
+## 7. OUTPUT FORMAT
+
+**CRITICAL OUTPUT REQUIREMENTS:**
+
+DO NOT include any text before or after the JSON.
+DO NOT use backticks, markdown, or code fences.
+DO NOT summarize, explain, or restate the email.
+
+**Return ONLY the JSON object below:**
+
+{{
     "intent": "Exact Intent Category Name",
     "sentiment": "Exact Sentiment Category Name",
     "confidence": 0.85,
     "reasoning": "Brief 1-2 sentence explanation of classification decision",
     "key_phrases": ["actual phrase from email", "another phrase", "third phrase"],
-    "extracted_entities": {
+    "extracted_entities": {{
         "invoice_numbers": ["INV-123"],
         "amounts": ["$1,234.56"],
         "dates": ["2024-01-15"],
         "contact_names": ["John Doe"]
-    },
+    }},
     "business_priority": "high|medium|low",
     "suggested_action": "Recommended next step for collections team",
     "requires_human_review": false,
     "review_reason": "Only if requires_human_review is true"
-}
-```
+}}
 
-**Important Output Notes**:
+**Important Field Notes**:
 - `confidence` must be a decimal number between 0.0 and 1.0, not a string
 - `key_phrases` must contain actual phrases extracted from the email, not generic placeholders
 - `extracted_entities` fields should be empty arrays if no entities found
@@ -1519,13 +1548,14 @@ Respond with ONLY a valid JSON object in this exact format:
 
         # Add disambiguation rules (generic, no hardcoded categories)
         prompt += """
-## DISAMBIGUATION RULES
+## 8. DISAMBIGUATION RULES
 
 ### When Multiple Intents Appear:
 1. **Primary vs Secondary**: Focus on the customer's PRIMARY purpose, not secondary mentions
 2. **Specificity**: Always choose the most specific applicable category
 3. **Urgency**: When multiple valid intents exist, prioritize the one requiring immediate action
 4. **Business Impact**: Consider which misclassification would have greater operational impact
+5. **Contact/Routing Updates**: When the primary action is updating contact information or submission methods (portal instructions, distribution list changes, routing preferences), classify as account/contact update
 
 ### When Sentiment is Mixed:
 1. **Emotional Hierarchy**: Prioritize emotionally significant sentiments over neutral ones
@@ -1549,76 +1579,95 @@ Respond with ONLY a valid JSON object in this exact format:
 
 """
 
-        # Add examples section
+        # Add few-shot examples section with real email data
         prompt += """
-## EXAMPLES
+## 9. FEW-SHOT EXAMPLES
+
+Study these complete examples to understand the expected classification pattern:
 
 """
 
-        # Add real examples from each major category if available
+        # Generate 2-3 concrete few-shot examples from real data
         example_count = 0
-        for intent_name, intent_data in list(intent_categories.items())[:2]:  # Top 2 intents
+        max_examples = 2
+
+        for intent_name, intent_data in intent_categories.items():
+            if example_count >= max_examples:
+                break
+
             real_examples = intent_data.get('real_email_examples', [])
 
             if real_examples and len(real_examples) > 0:
                 # Use first real example
                 example = real_examples[0]
                 subject = example.get('subject', '')
-                body = example.get('content', 'No content')[:300]  # Limit body length
+                body = example.get('content', 'No content')[:250]  # Limit body length for clarity
 
-                # Get key indicators for this category (support both field names)
+                # Get key phrases from the actual example content
                 key_indicators = intent_data.get('key_indicators', intent_data.get('sample_indicators', []))[:3]
-                key_phrases_json = json.dumps(key_indicators) if key_indicators else '[]'
 
-                prompt += f"""**Example {example_count + 1}: {intent_name}**
-```
+                # Infer a reasonable sentiment based on body content
+                # Use first sentiment category as default, look for frustrated keywords
+                default_sentiment = list(sentiment_categories.keys())[0]
+                inferred_sentiment = default_sentiment
+
+                # Simple heuristic: check for frustration keywords
+                body_lower = body.lower()
+                frustration_keywords = ['unfortunately', 'frustrated', 'disappointed', 'unacceptable', 'not paying', 'complaint']
+                if any(keyword in body_lower for keyword in frustration_keywords):
+                    # Find a frustrated sentiment if available
+                    for sent_name in sentiment_categories.keys():
+                        if 'frustrat' in sent_name.lower() or 'concern' in sent_name.lower():
+                            inferred_sentiment = sent_name
+                            break
+
+                # Extract entities from body
+                import re
+                invoice_match = re.search(r'\b(INV-?\s?\d+|invoice\s+#?\d+)\b', body, re.IGNORECASE)
+                amount_match = re.search(r'\$[\d,]+\.?\d*', body)
+
+                invoice_numbers = [invoice_match.group(0)] if invoice_match else []
+                amounts = [amount_match.group(0)] if amount_match else []
+
+                # Determine business priority
+                priority = "medium"
+                if inferred_sentiment != default_sentiment and 'frustrat' in inferred_sentiment.lower():
+                    priority = "high"
+                elif 'urgent' in body_lower or 'asap' in body_lower:
+                    priority = "high"
+
+                prompt += f"""---
+**EXAMPLE {example_count + 1}:**
+
+EMAIL:
 Subject: {subject if subject else '(no subject)'}
 Body: {body}
 
-Classification:
+EXPECTED JSON:
 {{
     "intent": "{intent_name}",
-    "sentiment": "(appropriate sentiment from categories above)",
-    "confidence": 0.85,
-    "reasoning": "Email demonstrates {intent_name.lower()} based on key indicators and primary purpose",
-    "key_phrases": {key_phrases_json},
+    "sentiment": "{inferred_sentiment}",
+    "confidence": 0.90,
+    "reasoning": "Customer {intent_name.lower().replace('and', '').strip()} with {inferred_sentiment.lower().replace('and', '').strip()} tone based on direct language and context",
+    "key_phrases": {json.dumps(key_indicators[:3])},
     "extracted_entities": {{
-        "invoice_numbers": [],
-        "amounts": [],
+        "invoice_numbers": {json.dumps(invoice_numbers)},
+        "amounts": {json.dumps(amounts)},
         "dates": [],
         "contact_names": []
     }},
-    "business_priority": "medium",
-    "suggested_action": "Review and respond according to category guidelines",
+    "business_priority": "{priority}",
+    "suggested_action": "{'Prioritize response and address concerns' if priority == 'high' else 'Acknowledge and provide requested information'}",
     "requires_human_review": false
 }}
-```
 
 """
-            example_count += 1
+                example_count += 1
+
+        # Business Priority Guidelines moved before OUTPUT FORMAT section (removed duplicate)
 
         prompt += f"""
-## BUSINESS PRIORITY GUIDELINES
-
-Assign business priority based on these factors:
-
-**High Priority**:
-- Emails with frustrated or escalated sentiment
-- Payment disputes or urgent payment issues
-- Time-sensitive matters (deadlines mentioned)
-- Multiple follow-ups on same issue
-
-**Medium Priority**:
-- Standard requests from cooperative customers
-- Routine updates or confirmations
-- Non-urgent information requests
-
-**Low Priority**:
-- Purely informational emails requiring no action
-- Acknowledgments or thank-you messages
-- Out-of-office or automated replies
-
-## CRITICAL REMINDERS
+## 10. CRITICAL REMINDERS
 
 - Respond with ONLY the JSON object - no additional text, markdown, or formatting outside the JSON
 - Use exact category names as defined in the categories sections above
