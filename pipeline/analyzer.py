@@ -7,6 +7,7 @@ Analyzes email clusters and proposes categories using OpenAI API.
 
 import json
 import os
+import unicodedata
 from typing import Dict, List, Any, Optional
 from openai import OpenAI, APIError, RateLimitError, APITimeoutError
 from tqdm import tqdm
@@ -167,6 +168,11 @@ class LLMAnalyzer:
         """
         if not content:
             return "No content available"
+
+        # Normalize Unicode to handle curly quotes, non-breaking spaces, em-dashes, etc.
+        # NFKC = Compatibility + Composed form (converts visual variants to canonical forms)
+        # Example: "smart quotes" → "regular quotes", \u00A0 → regular space
+        content = unicodedata.normalize("NFKC", content)
 
         # Strip HTML tags
         content = re.sub(r"<[^>]+>", "", content)
