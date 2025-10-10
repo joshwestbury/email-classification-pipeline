@@ -172,8 +172,13 @@ class LLMAnalyzer:
         content = re.sub(r"<[^>]+>", "", content)
 
         # Drop quoted reply blocks (common email patterns)
-        content = re.sub(r"(?m)^>.*$", "", content)  # Lines starting with >
-        content = re.sub(r"(?is)^On .* wrote:.*", "", content)  # "On [date] [person] wrote:"
+        # Remove lines with quote markers: >, >>, |, etc. (supports nested/indented quotes)
+        content = re.sub(r"(?m)^[>\|]{1,}.*$", "", content)
+
+        # Remove "On [date] [person] wrote:" headers anywhere in content (not just start)
+        # Matches: "On Mon, Jan 15, 2024 at 3:45 PM John Smith wrote:"
+        #          "On Tuesday, March 5, 2024 Jane Doe <jane@example.com> wrote:"
+        content = re.sub(r"(?ism)\bon\s+\w{3,9}\s+\d{1,2},\s+\d{4}.*?wrote:.*?$", "", content)
 
         # Drop common signature/footer markers (split at first match)
         content = re.split(
