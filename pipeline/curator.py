@@ -1485,6 +1485,8 @@ Assign confidence based on indicator clarity:
 - **Medium (0.5-0.79)**: Some indicators present with minor ambiguity
 - **Low (0.0-0.49)**: Weak or conflicting indicators - flag for human review
 
+**IMPORTANT**: Even if confidence is low, you MUST still classify into one of the defined categories above. Do NOT refuse to classify or create ad-hoc categories. Make your best determination based on available indicators and set `requires_human_review: true` for manual verification when confidence falls below 0.5.
+
 """
 
         # Add business priority guidelines BEFORE output format (improves token generation)
@@ -1677,6 +1679,8 @@ EXPECTED JSON:
 - When uncertain (confidence < 0.5), always set `requires_human_review: true`
 - Consider collections operational context in your decisions
 - Prioritize business value and operational efficiency in edge cases
+
+**IMPORTANT**: Even if confidence is low, you MUST still classify into one of the defined categories above. Do NOT refuse to classify or create ad-hoc categories. Make your best determination based on available indicators and set `requires_human_review: true` for manual verification when confidence falls below 0.5.
 
 ---
 
