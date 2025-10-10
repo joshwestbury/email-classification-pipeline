@@ -8,13 +8,14 @@ Analyzes email clusters and proposes categories using OpenAI API.
 import json
 import os
 from typing import Dict, List, Any, Optional
-from openai import OpenAI
+from openai import OpenAI, APIError, RateLimitError, APITimeoutError
 from tqdm import tqdm
 import re
 import random
+import hashlib
 import logging
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from .sentiment_analyzer import SentimentAnalyzer
 
@@ -28,15 +29,30 @@ class LLMClusterAnalysis(BaseModel):
     """Pydantic model for LLM cluster analysis response validation."""
 
     proposed_intent: str = Field(..., min_length=1, max_length=200, description="Specific intent category name")
-    intent_definition: str = Field(..., min_length=10, max_length=500, description="Precise definition of customer intent")
+    intent_definition: str = Field(..., min_length=10, max_length=800, description="Precise definition of customer intent")
     proposed_sentiment: str = Field(..., min_length=1, max_length=200, description="Specific emotional tone category name")
-    sentiment_definition: str = Field(..., min_length=10, max_length=500, description="Precise definition of emotional state")
-    decision_rules: List[str] = Field(..., min_items=1, max_items=10, description="Specific decision rules for classification")
-    confidence: str = Field(..., pattern=r'^(high|medium|low)$', description="Confidence level in analysis")
+    sentiment_definition: str = Field(..., min_length=10, max_length=800, description="Precise definition of emotional state")
+    decision_rules: List[str] = Field(..., min_items=3, max_items=6, description="3-6 IF/THEN rules referencing observable cues")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Model confidence 0.0-1.0")
     sample_indicators: List[str] = Field(..., min_items=1, max_items=10, description="Specific phrases indicating this category")
     emotional_markers: List[str] = Field(default_factory=list, max_items=10, description="Emotional indicators in text")
     reasoning: str = Field(..., min_length=20, max_length=1000, description="Detailed explanation of clustering rationale")
     business_relevance: str = Field(..., min_length=10, max_length=500, description="Business value for collections operations")
+
+    @field_validator("decision_rules")
+    @classmethod
+    def rules_should_have_structure(cls, v: List[str]) -> List[str]:
+        """Validate decision rules have clear conditional structure (soft validation)."""
+        for i, rule in enumerate(v):
+            s = rule.lower()
+            # Require explicit IF and THEN (or close synonyms)
+            has_if = any(m in s for m in ["if ", "when ", "where "])
+            has_then = any(m in s for m in [" then ", " should ", " classify ", " tag ", " leans to "])
+
+            if not (has_if and has_then):
+                logger.warning(f"Decision rule {i+1} lacks clear IF/THEN structure: {rule[:100]}")
+
+        return v  # Don't fail validation, just warn
 
     class Config:
         extra = "forbid"  # Reject any extra fields not defined in schema
@@ -61,6 +77,38 @@ class LLMAnalyzer:
             if not api_key:
                 raise ValueError("OpenAI API key not provided. Set OPENAI_API_KEY environment variable or pass api_key parameter.")
             self.client = OpenAI(api_key=api_key)
+
+    @staticmethod
+    def _deterministic_seed(cluster_id: str) -> int:
+        """Generate deterministic seed from cluster ID for reproducible sampling.
+
+        Uses MD5 hash to ensure consistent results across runs, avoiding Python's
+        randomized hash() function which varies per interpreter session.
+
+        Args:
+            cluster_id: Cluster identifier string
+
+        Returns:
+            Deterministic integer seed for random number generation
+        """
+        return int.from_bytes(
+            hashlib.md5(cluster_id.encode("utf-8")).digest()[:8],
+            byteorder="big"
+        )
+
+    @staticmethod
+    def _normalize_category(label: str) -> str:
+        """Normalize category names for consistent tallying.
+
+        Prevents fragmentation like "Payment Plan" vs "payment plan" vs "Payment plan".
+
+        Args:
+            label: Raw category label from LLM
+
+        Returns:
+            Normalized category name (title case, collapsed whitespace)
+        """
+        return re.sub(r"\s+", " ", label.strip()).title()
 
     def get_cluster_samples(self, cluster_analysis: Dict[str, Any], source_data: Dict[str, Any], cluster_id: str, sample_size: int = 5) -> List[Dict[str, Any]]:
         """Get sample emails from a specific cluster for analysis."""
@@ -93,8 +141,8 @@ class LLMAnalyzer:
 
             incoming_emails = [e for e in emails if e.get('direction') == 'incoming']
             if incoming_emails:
-                # Use cluster_id as seed for consistency
-                random.seed(int(cluster_id) if cluster_id.isdigit() else hash(cluster_id))
+                # Use deterministic seed for reproducible sampling across runs
+                random.seed(self._deterministic_seed(cluster_id))
                 additional_samples = random.sample(
                     incoming_emails,
                     min(sample_size - len(sample_emails), len(incoming_emails))
@@ -112,55 +160,115 @@ class LLMAnalyzer:
         return sample_emails[:sample_size]
 
     def _clean_email_content(self, content: str) -> str:
-        """Clean and truncate email content for LLM analysis."""
+        """Clean and truncate email content for LLM analysis.
+
+        Aggressively removes noise (HTML, signatures, quoted replies, footers)
+        that can confuse sentiment and intent classification.
+        """
         if not content:
             return "No content available"
 
-        # Remove HTML tags if any remain
-        content = re.sub(r'<[^>]+>', '', content)
+        # Strip HTML tags
+        content = re.sub(r"<[^>]+>", "", content)
 
-        # Limit length for API efficiency while preserving important context
-        max_length = 1500  # Increased to capture more emotional and intent context
+        # Drop quoted reply blocks (common email patterns)
+        content = re.sub(r"(?m)^>.*$", "", content)  # Lines starting with >
+        content = re.sub(r"(?is)^On .* wrote:.*", "", content)  # "On [date] [person] wrote:"
+
+        # Drop common signature/footer markers (split at first match)
+        content = re.split(
+            r"(?im)^(thanks[,\s]|regards[,\s]|best[,\s]|sincerely[,\s]|--\s|__+|confidentiality notice|this message.*confidential)",
+            content
+        )[0]
+
+        # Collapse excessive whitespace
+        content = re.sub(r"\s+\n", "\n", content)  # Remove trailing spaces before newlines
+        content = re.sub(r"\n{3,}", "\n\n", content).strip()  # Max 2 consecutive newlines
+
+        # Limit length for API efficiency
+        max_length = 1200
         if len(content) > max_length:
             content = content[:max_length] + "..."
 
-        return content.strip()
+        return content
 
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=4, max=10),
-        retry=retry_if_exception_type((ValidationError, json.JSONDecodeError, KeyError))
+        wait=wait_exponential(multiplier=1, min=4, max=12),
+        retry=retry_if_exception_type((
+            json.JSONDecodeError,
+            KeyError,
+            APIError,
+            RateLimitError,
+            APITimeoutError
+        )),
+        reraise=True
     )
     def _make_llm_request_with_validation(self, prompt: str, cluster_id: str) -> LLMClusterAnalysis:
-        """Make LLM request with validation and retry logic."""
+        """Make LLM request with validation and retry logic.
+
+        Attempts to use OpenAI's response_format JSON mode for guaranteed valid JSON.
+        Falls back to regex extraction if the model doesn't support it.
+        """
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "You are an expert in customer service and collections email analysis. You help categorize customer communications for business intelligence and automated processing. You MUST respond with valid JSON only - no other text, explanations, or formatting."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.1,
-                max_tokens=1000
-            )
+            # Try using response_format for JSON mode (gpt-4o, gpt-4-turbo, etc.)
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    response_format={"type": "json_object"},
+                    messages=[
+                        {"role": "system", "content": "You are an expert in customer service and collections email analysis. You help categorize customer communications for business intelligence and automated processing. You MUST respond with valid JSON only - no other text, explanations, or formatting."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.1,
+                    max_tokens=1200
+                )
 
-            response_text = response.choices[0].message.content.strip()
-            logger.debug(f"Raw LLM response for cluster {cluster_id}: {response_text[:200]}...")
+                response_text = response.choices[0].message.content.strip()
+                logger.debug(f"Raw LLM response for cluster {cluster_id}: {response_text[:200]}...")
 
-            # Extract JSON from response
-            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-            if not json_match:
-                raise ValueError(f"No JSON object found in LLM response for cluster {cluster_id}")
+                # With response_format, we can parse directly
+                raw_json = json.loads(response_text)
+                validated_response = LLMClusterAnalysis(**raw_json)
 
-            # Parse and validate JSON
-            raw_json = json.loads(json_match.group())
-            validated_response = LLMClusterAnalysis(**raw_json)
+                logger.info(f"Successfully validated LLM response for cluster {cluster_id} (JSON mode)")
+                return validated_response
 
-            logger.info(f"Successfully validated LLM response for cluster {cluster_id}")
-            return validated_response
+            except (TypeError, Exception) as format_error:
+                # Model doesn't support response_format, fall back to regex extraction
+                if "response_format" in str(format_error) or "json_object" in str(format_error):
+                    logger.debug(f"Model {self.model} doesn't support response_format, using regex fallback")
+
+                    response = self.client.chat.completions.create(
+                        model=self.model,
+                        messages=[
+                            {"role": "system", "content": "You are an expert in customer service and collections email analysis. You help categorize customer communications for business intelligence and automated processing. You MUST respond with valid JSON only - no other text, explanations, or formatting."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        temperature=0.1,
+                        max_tokens=1200
+                    )
+
+                    response_text = response.choices[0].message.content.strip()
+                    logger.debug(f"Raw LLM response for cluster {cluster_id}: {response_text[:200]}...")
+
+                    # Extract JSON from response using regex
+                    json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+                    if not json_match:
+                        raise ValueError(f"No JSON object found in LLM response for cluster {cluster_id}")
+
+                    # Parse and validate JSON
+                    raw_json = json.loads(json_match.group())
+                    validated_response = LLMClusterAnalysis(**raw_json)
+
+                    logger.info(f"Successfully validated LLM response for cluster {cluster_id} (regex mode)")
+                    return validated_response
+                else:
+                    # Different error, re-raise
+                    raise
 
         except ValidationError as e:
-            logger.error(f"Validation error for cluster {cluster_id}: {e}")
+            logger.error(f"Pydantic validation error for cluster {cluster_id}: {e}")
             raise
         except json.JSONDecodeError as e:
             logger.error(f"JSON decode error for cluster {cluster_id}: {e}")
@@ -253,13 +361,17 @@ class LLMAnalyzer:
             "intent_definition": "precise definition focusing on customer's specific request or communication purpose",
             "proposed_sentiment": "specific emotional tone category name",
             "sentiment_definition": "precise definition of the customer's emotional state and communication style",
-            "decision_rules": ["specific rule 1", "specific rule 2", "specific rule 3"],
-            "confidence": "high/medium/low",
+            "decision_rules": ["IF ... THEN rule 1", "IF ... THEN rule 2", "IF ... THEN rule 3"],
+            "confidence": 0.0,
             "sample_indicators": ["specific phrase 1", "specific phrase 2", "specific phrase 3"],
             "emotional_markers": ["emotional indicator 1", "emotional indicator 2"],
             "reasoning": "detailed explanation of why these emails cluster together",
             "business_relevance": "specific value this category provides to collections operations"
         }}
+
+        IMPORTANT:
+        - "confidence" must be a number between 0.0 and 1.0 (e.g., 0.95 for high confidence, 0.7 for medium, 0.4 for low)
+        - "decision_rules" should be 3-6 IF/THEN statements referencing observable patterns in the emails
 
         IMPORTANT FORMATTING RULES:
         - Return ONLY the JSON object
@@ -269,46 +381,46 @@ class LLMAnalyzer:
         - Do not use trailing commas
         - Validate that your response is parseable JSON before sending
 
-        ## UNDERSTANDING INTENT AND SENTIMENT
+        ## UNDERSTANDING INTENT AND SENTIMENT (for discovery)
 
-        **Intent Definition**: The underlying purpose of the customer's email - what they want to achieve. This represents the ACTION or OUTCOME the customer is seeking. Intent is about the "what" and "why" of their communication. Common patterns include:
-        - Requesting action (asking you to do something specific)
-        - Sharing information (providing updates, reports, or FYI content)
-        - Seeking information (asking questions or requesting clarification)
-        - Building relationship (maintaining rapport, expressing gratitude)
-        - Persuading/Influencing (convincing you of a viewpoint)
-        - Scheduling/Coordinating (arranging timing or logistics)
+        **INTENT (What outcome the customer wants in the AR/collections process)**
+        - **Definition**: The primary, operational outcome the customer is trying to achieve with this email (e.g., change invoice state, obtain payment credit, alter terms/timing, correct records).
+        - **Inclusion cues** (choose the single dominant intent):
+          • Clear "ask" that would change an AR record, balance, due date, charge, or service status
+          • Procedural requests requiring staff action (resend, reissue, attach docs, update entity/contact, unblock/suspend)
+          • Information-seeking specifically tied to payment, balance, invoice, credit/adjustment, or service status
+        - **Exclusions** (do NOT call these "intent" unless they contain a concrete AR outcome):
+          • Pure FYI with no implied change to AR state
+          • Relationship talk (thanks/apologies) without an ask affecting AR
+          • Forwarded material with no new instruction
+        - **Output**: A specific, 1–3 word label that naturally describes the outcome customers are trying to cause (no generic catch-alls).
 
-        **Sentiment Definition**: The emotional tone conveyed in the customer's message - how they feel. This represents their EMOTIONAL STATE and COMMUNICATION STYLE. Sentiment captures:
-        - Polarity (positive, negative, or neutral emotional direction)
-        - Intensity (mild, moderate, or strong emotional expression)
-        - Specific emotional states as they naturally appear in the customer's language
+        **SENTIMENT (How they feel and communicate while pursuing that outcome)**
+        - **Definition**: The emotional state and communication style expressed in the message.
+        - **Assess on three dimensions** (summarize into one concise sentiment label):
+          1) Valence: positive / neutral / negative
+          2) Intensity: mild / moderate / strong
+          3) Communication style: collaborative, transactional, defensive, impatient, escalatory, accusatory
+        - **Linguistic markers** (non-exhaustive examples as evidence):
+          • Positive/collaborative: "thanks", "appreciate", "happy to", "we can provide", softeners ("could you", "when you have a moment")
+          • Neutral/administrative: declarative statements, formality, no affective words, passive constructions
+          • Urgency/escalation: deadlines/dates, "ASAP", repeat punctuation, all-caps/exclamations, "escalate", "legal", "terminate"
+          • Frustration/blame: "incorrect", "again", "still waiting", "you charged", "this is unacceptable"
+          • Apology/constraint: "sorry", "delay", "we're short", "cannot pay until"
+        - **Output**: A specific, 1–3 word sentiment name reflecting the dominant pattern (e.g., "Polite Concern", "Neutral Professional", "Escalated Frustration"). When mixed, pick the sentiment that most changes handling for collections.
 
-        ## YOUR TASK: ORGANIC CATEGORY DISCOVERY
+        **DECISION RULES (make these operational and testable)**
+        - Provide 3–6 IF/THEN rules referencing observable cues. Example:
+          • IF the email contains a payment verb ("pay", "remit", "wire", "schedule") AND a future date expression, THEN intent leans to "Payment Scheduling".
+          • IF contains dispute terms ("incorrect", "dispute", "overcharged", "credit due") OR requests for corrected docs, THEN intent leans to "Invoice Correction/Dispute".
+          • IF contains deadlines, escalatory language, or termination threats, THEN sentiment leans to "Escalated Frustration".
 
-        Analyze this cluster of similar emails to identify:
+        **SAMPLE INDICATORS**
+        - Provide 3–8 **verbatim** short phrases from the samples that support the chosen intent.
+        - Provide 2–6 **verbatim** phrases that support the chosen sentiment (emotional markers).
 
-        1. **Natural Intent Category**: What specific intent emerges from these emails? Name it based on what customers are actually trying to accomplish. Don't force it into predefined categories - let the data speak.
-
-        2. **Natural Sentiment Category**: What emotional tone characterizes these emails? Name it based on the actual emotional content you observe. The sentiment should reflect genuine emotional patterns, not generic labels.
-
-        3. **Business Value**: How does identifying this specific intent/sentiment combination help collections operations?
-
-        ## ANALYSIS GUIDELINES
-
-        - Create category names that are DESCRIPTIVE and SPECIFIC to what you observe
-        - Don't default to generic terms like "Professional" or "Administrative" unless truly warranted
-        - If emails show mixed sentiments, choose the most operationally significant one
-        - Consider minority emotional indicators if they require different business handling
-        - Intent and sentiment categories should emerge naturally from the email content
-        - Category names should be 1-3 words, clear and actionable
-
-        IMPORTANT GUIDELINES:
-        - Avoid generic terms like "Administrative" or "Information Request"
-        - Focus on what the customer specifically wants or needs
-        - Capture the emotional undertone of how they're communicating
-        - Create categories that help collections teams understand customer state and respond appropriately
-        - Each category should represent a distinct communication pattern requiring different handling
+        **BUSINESS RELEVANCE**
+        - Describe how this intent+sentiment combo changes queueing, SLA, or playbook (e.g., route to Disputes, prioritize within 24h, require attachment checklist, trigger manager review).
         """
 
         try:
@@ -323,7 +435,18 @@ class LLMAnalyzer:
             analysis_result['sample_count'] = len(sample_emails)
             analysis_result['validation_status'] = 'success'
 
+            # Add provenance fields for auditing
+            analysis_result['provenance'] = {
+                'model': self.model,
+                'preanalysis_mode': self.preanalysis_mode,
+                'prompt_bytes': len(prompt.encode('utf-8')),
+                'sample_emails_analyzed': len(sample_emails)
+            }
+
             logger.info(f"Successfully analyzed cluster {cluster_id} with validation")
+            logger.debug(f"First decision rule: {validated_response.decision_rules[0][:100]}")
+            logger.debug(f"Top indicator: {validated_response.sample_indicators[0] if validated_response.sample_indicators else 'none'}")
+
             return analysis_result
 
         except ValidationError as e:
@@ -400,14 +523,15 @@ class LLMAnalyzer:
         failed_validations = len([a for a in cluster_analyses.values() if a.get('validation_status') == 'failed'])
         validation_success_rate = (successful_validations / len(cluster_analyses) * 100) if cluster_analyses else 0
 
-        # Compile proposed categories
+        # Compile proposed categories with normalized names
         intent_categories = {}
         sentiment_categories = {}
 
         for cluster_id, analysis in cluster_analyses.items():
             if 'error' not in analysis:
-                intent = analysis.get('proposed_intent', '')
-                sentiment = analysis.get('proposed_sentiment', '')
+                # Normalize category names to prevent fragmentation
+                intent = self._normalize_category(analysis.get('proposed_intent', ''))
+                sentiment = self._normalize_category(analysis.get('proposed_sentiment', ''))
 
                 if intent:
                     if intent not in intent_categories:
